@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <title>Warm Up</title>
+    <style>
+        :root {
+            --ember: #d4893a;
+            --ember-deep: #9a5520;
+            --ember-glow: #f0b35a;
+            --coal: #2a1810;
+            --coal-soft: #3d2418;
+            --brass: #f0d78c;
+            --ink: #1a1008;
+            --cream: #fff8ea;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 28%, #f0b35a 0%, #d4893a 35%, #8a4a18 70%, #2a1810 100%);
+            background: var(--page-bg);
+            color: var(--cream);
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid var(--brass);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted var(--brass);
+            border-radius: 8px;
+        }
+
+        .window-game-title {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: var(--brass);
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid var(--brass);
+            border-right: 4px solid var(--brass);
+        }
+
+        .arena {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 48px 40px 56px;
+            gap: 28px;
+        }
+
+        .visit-live {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: min(1100px, 100%);
+            z-index: 5;
+        }
+
+        .visit-label {
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 900;
+            color: rgba(255, 244, 228, 0.7);
+        }
+
+        .dart-row {
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            gap: 18px;
+            width: 100%;
+        }
+
+        .dart-box {
+            flex: 1 1 0;
+            min-height: 160px;
+            border-radius: 14px;
+            border: 3px solid rgba(26, 16, 8, 0.55);
+            background: rgba(26, 16, 8, 0.28);
+            box-shadow: inset 0 0 0 2px rgba(226, 197, 106, 0.18);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: rgba(255, 244, 228, 0.28);
+            letter-spacing: 2px;
+            font-weight: 900;
+            transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
+
+        .dart-box.waiting::after {
+            content: '—';
+            font-size: 2.4rem;
+            opacity: 0.45;
+        }
+
+        .dart-box.filled {
+            color: var(--cream);
+            background: rgba(26, 16, 8, 0.55);
+            border-color: var(--ink);
+            box-shadow:
+                inset 0 0 0 2px rgba(226, 197, 106, 0.4),
+                0 12px 28px rgba(0, 0, 0, 0.28);
+            animation: dartLand 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dart-box.total-box {
+            flex: 0.85 1 0;
+            background: rgba(232, 160, 74, 0.18);
+            border-color: rgba(226, 197, 106, 0.55);
+        }
+
+        .dart-box.total-box.filled {
+            background: linear-gradient(180deg, rgba(232, 160, 74, 0.45), rgba(138, 74, 18, 0.55));
+            color: var(--ink);
+        }
+
+        .dart-box .mult {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            height: 42px;
+            padding: 0 10px;
+            border-radius: 8px;
+            background: var(--brass);
+            color: var(--ink);
+            font-size: 1.35rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+        }
+
+        .dart-box .mult.d { background: #7AD7F0; }
+        .dart-box .mult.t { background: #ff8a80; }
+
+        .dart-box .val {
+            font-size: 3.2rem;
+            line-height: 1;
+            letter-spacing: 1px;
+        }
+
+        .dart-box.miss .val {
+            font-size: 2.2rem;
+            letter-spacing: 4px;
+            color: rgba(255, 244, 228, 0.65);
+        }
+
+        .dart-box .slot-label {
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.55;
+        }
+
+        .dart-box.total-box .val {
+            font-size: 3.6rem;
+        }
+
+        .history-wrap {
+            flex: 1 1 auto;
+            width: min(1100px, 100%);
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 4;
+        }
+
+        .history-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding: 0 6px;
+            color: rgba(255, 244, 228, 0.65);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 900;
+            font-size: 0.8rem;
+        }
+
+        .history-head .count {
+            color: var(--brass);
+            letter-spacing: 1px;
+        }
+
+        .history-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 4px 8px 18px;
+            border-radius: 12px;
+            background: rgba(26, 16, 8, 0.22);
+            border: 2px solid rgba(26, 16, 8, 0.35);
+            box-shadow: inset 0 0 0 1px rgba(226, 197, 106, 0.12);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(226, 197, 106, 0.55) transparent;
+            pointer-events: auto;
+        }
+
+        .history-scroll::-webkit-scrollbar { width: 10px; }
+        .history-scroll::-webkit-scrollbar-thumb {
+            background: rgba(226, 197, 106, 0.45);
+            border-radius: 8px;
+        }
+
+        .history-empty {
+            padding: 36px 16px;
+            text-align: center;
+            color: rgba(255, 244, 228, 0.4);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 900;
+            font-size: 0.9rem;
+        }
+
+        .history-row {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        /* Only the newly stacked visit animates — not every row on each dart sync */
+        .history-row.is-new {
+            animation: historyPush 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .history-row .mini-box {
+            flex: 1 1 0;
+            min-height: 64px;
+            border-radius: 10px;
+            border: 2px solid rgba(26, 16, 8, 0.5);
+            background: rgba(26, 16, 8, 0.42);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            font-weight: 900;
+            color: var(--cream);
+            box-shadow: inset 0 0 0 1px rgba(226, 197, 106, 0.2);
+            overflow: hidden;
+        }
+
+        .history-row .mini-box.total {
+            flex: 0.85 1 0;
+            background: rgba(232, 160, 74, 0.28);
+            color: var(--brass);
+            font-size: 1.55rem;
+            letter-spacing: 1px;
+        }
+
+        .history-row .mini-box .score-cluster {
+            display: grid;
+            grid-template-columns: 28px 4.5ch;
+            align-items: center;
+            column-gap: 8px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .history-row .mini-box.miss .val {
+            color: rgba(255, 244, 228, 0.55);
+            letter-spacing: 2px;
+            font-size: 0.95rem;
+        }
+
+        .history-row .mini-box .mult {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            background: var(--brass);
+            color: var(--ink);
+            font-size: 0.75rem;
+            font-weight: 900;
+            justify-self: center;
+        }
+
+        .history-row .mini-box .mult.placeholder {
+            visibility: hidden;
+        }
+
+        .history-row .mini-box .mult.d { background: #7AD7F0; }
+        .history-row .mini-box .mult.t { background: #ff8a80; }
+
+        .history-row .mini-box .val {
+            font-size: 1.25rem;
+            font-variant-numeric: tabular-nums;
+            text-align: left;
+            letter-spacing: 0;
+        }
+
+        .history-row .mini-box .wm-label {
+            position: absolute;
+            left: 12px;
+            top: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255, 244, 228, 0.15);
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+        }
+
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(26, 16, 8, 0.95);
+            border: 2px solid var(--brass);
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: var(--brass); margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 0.95rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dartLand {
+            from { transform: translateY(-10px) scale(0.96); opacity: 0.4; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes historyPush {
+            from { transform: translateY(-24px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">Warm Up</div>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Warm Up</h3>
+        <p>• Solo practice — no scoreboard, no winner, just heat.</p>
+        <p>• Throw three darts. Each lands in a box as S, D, or T.</p>
+        <p>• The fourth box totals the visit.</p>
+        <p>• Pull your darts and the visit stacks into history so you can throw again.</p>
+    </div>
+
+    <div class="arena">
+        <div class="visit-live">
+            <div class="visit-label">This Visit</div>
+            <div class="dart-row" id="liveRow"></div>
+        </div>
+
+        <div class="history-wrap">
+            <div class="history-head">
+                <span>History</span>
+                <span class="count" id="historyCount">0 / 50</span>
+            </div>
+            <div class="history-scroll" id="historyScroll">
+                <div class="history-empty" id="historyEmpty">Stack fills as you throw</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastHistoryIds = [];
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function dartBoxHtml(dart, index, isTotal, totalValue) {
+            if (isTotal) {
+                const filled = totalValue != null;
+                return `<div class="dart-box total-box ${filled ? 'filled' : 'waiting'}">
+                    <div class="slot-label">Total</div>
+                    ${filled ? `<div class="val">${escapeHtml(totalValue)}</div>` : ''}
+                </div>`;
+            }
+
+            if (!dart) {
+                return `<div class="dart-box waiting">
+                    <div class="slot-label">Dart ${index + 1}</div>
+                </div>`;
+            }
+
+            if (!dart.mult) {
+                return `<div class="dart-box filled miss">
+                    <div class="slot-label">Dart ${index + 1}</div>
+                    <div class="val">${escapeHtml(dart.label || 'MISS')}</div>
+                </div>`;
+            }
+
+            const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+            return `<div class="dart-box filled">
+                <div class="slot-label">Dart ${index + 1}</div>
+                <span class="mult ${mClass}">${escapeHtml(dart.mult)}</span>
+                <div class="val">${escapeHtml(dart.label)}</div>
+            </div>`;
+        }
+
+        function miniBoxHtml(dart, index) {
+            const label = `Dart ${index + 1}`;
+            if (!dart) {
+                return `<div class="mini-box">
+                    <span class="wm-label">${label}</span>
+                    <div class="score-cluster">
+                        <span class="mult placeholder" aria-hidden="true">S</span>
+                        <span class="val">—</span>
+                    </div>
+                </div>`;
+            }
+            if (!dart.mult) {
+                return `<div class="mini-box miss">
+                    <span class="wm-label">${label}</span>
+                    <div class="score-cluster">
+                        <span class="mult placeholder" aria-hidden="true">S</span>
+                        <span class="val">${escapeHtml(dart.label || 'MISS')}</span>
+                    </div>
+                </div>`;
+            }
+            const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+            return `<div class="mini-box">
+                <span class="wm-label">${label}</span>
+                <div class="score-cluster">
+                    <span class="mult ${mClass}">${escapeHtml(dart.mult)}</span>
+                    <span class="val">${escapeHtml(dart.label)}</span>
+                </div>
+            </div>`;
+        }
+
+        function visitTotal(darts) {
+            return (darts || []).reduce((sum, d) => sum + (Number(d && d.score) || 0), 0);
+        }
+
+        function renderLive(gd) {
+            const row = document.getElementById('liveRow');
+            if (!row) return;
+            const darts = Array.isArray(gd.turnDarts) ? gd.turnDarts : [];
+            const total = darts.length ? visitTotal(darts) : null;
+            let html = '';
+            for (let i = 0; i < 3; i++) {
+                html += dartBoxHtml(darts[i], i, false);
+            }
+            html += dartBoxHtml(null, 3, true, total);
+            row.innerHTML = html;
+        }
+
+        function renderHistory(gd) {
+            const scroll = document.getElementById('historyScroll');
+            const countEl = document.getElementById('historyCount');
+            const history = Array.isArray(gd.visitHistory) ? gd.visitHistory : [];
+            if (countEl) countEl.textContent = `${history.length} / 50`;
+
+            if (!scroll) return;
+
+            if (!history.length) {
+                if (lastHistoryIds.length) {
+                    scroll.innerHTML = '<div class="history-empty" id="historyEmpty">Stack fills as you throw</div>';
+                    lastHistoryIds = [];
+                }
+                return;
+            }
+
+            const ids = history.map((v, idx) => v.id || String(idx));
+            const unchanged = ids.length === lastHistoryIds.length
+                && ids.every((id, i) => id === lastHistoryIds[i]);
+            if (unchanged) return;
+
+            const newestId = ids[0];
+            const isNewPush = !!(newestId && lastHistoryIds[0] !== newestId);
+
+            let html = '';
+            history.forEach((visit, idx) => {
+                const darts = Array.isArray(visit.darts) ? visit.darts : [];
+                const rowClass = isNewPush && idx === 0 ? 'history-row is-new' : 'history-row';
+                html += `<div class="${rowClass}">`;
+                for (let i = 0; i < 3; i++) {
+                    html += miniBoxHtml(darts[i], i);
+                }
+                html += `<div class="mini-box total">
+                    <span class="wm-label">Total</span>
+                    ${escapeHtml(visit.total != null ? visit.total : visitTotal(darts))}
+                </div>`;
+                html += '</div>';
+            });
+            scroll.innerHTML = html;
+
+            if (isNewPush) {
+                scroll.scrollTop = 0;
+            }
+            lastHistoryIds = ids;
+        }
+
+        function applyGameData(gd) {
+            if (!gd || gd.gameType !== 'warmup') return;
+            document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+            renderLive(gd);
+            renderHistory(gd);
+        }
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== 'SYNC_STATE' || !data.state) return;
+            applyGameData(data.state.gameData);
+        });
+    </script>
+</body>
+</html>

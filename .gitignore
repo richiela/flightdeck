@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Local runtime data (player roster + avatars + secrets)
+data/
+
+# Local TLS material (do not commit private keys)
+certs/
+
+# Runtime log from run.sh
+.run.log
+
+# Local image / clip tooling (keep venvs outside the game tree when possible)
+.venv-img/
+.venv-ytdlp/
+
+# macOS Finder junk
+.DS_Store
+**/.DS_Store
+.tmp-verify/

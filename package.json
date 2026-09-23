@@ -1,0 +1,28 @@
+{
+  "name": "flightdeck",
+  "version": "0.21.1",
+  "description": "A control panel + kiosk display for running a real dartboard as a party/venue game system.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "nodemon src/server.js",
+    "dev": "SCORING_MODE=mock PORT=4000 nodemon src/server.js",
+    "test": "node tests/engine-golden.js",
+    "test:update": "node tests/engine-golden.js --update"
+  },
+  "keywords": [],
+  "author": "Richie Lai",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "tp-link-tapo-connect": "^2.0.15",
+    "uuid": "^14.0.1",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

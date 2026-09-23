@@ -1,0 +1,611 @@
+/* FLIGHTCLUB_PLAYER_THEME v1
+   Shared player colors + avatar sizes across all games.
+   Revert: delete this file + shared-player-theme.js and restore game HTML from git. */
+
+:root {
+    --fc-p0: #8FD91B; /* Lime */
+    --fc-p1: #2BA4FF; /* Azure */
+    --fc-p2: #FF7A18; /* Orange */
+    --fc-p3: #B44AFF; /* Violet */
+    --fc-p4: #FF2E55; /* Crimson */
+    --fc-p5: #F0C400; /* Gold */
+    --fc-p6: #00C97B; /* Emerald */
+    --fc-p7: #E1008C; /* Magenta */
+
+    --fc-p0-rgb: 143, 217, 27;
+    --fc-p1-rgb: 43, 164, 255;
+    --fc-p2-rgb: 255, 122, 24;
+    --fc-p3-rgb: 180, 74, 255;
+    --fc-p4-rgb: 255, 46, 85;
+    --fc-p5-rgb: 240, 196, 0;
+    --fc-p6-rgb: 0, 201, 123;
+    --fc-p7-rgb: 225, 0, 140;
+
+    /* Sized for the 1920x1080 @ 8ft viewing standard (~69 PPI on a 32in monitor):
+       ~1.75in in-play, ~2.6in overlay. Do not shrink per-game. */
+    --fc-avatar-inplay: 120px;
+    --fc-avatar-overlay: 180px;
+    --fc-font: 'Arial Rounded MT Bold', 'Helvetica Rounded', sans-serif;
+    --fc-initials: #543417;
+
+    /* Active-turn ring/glow (no scale — layout-safe) */
+    --fc-active-ring: #fff;
+    --fc-active-glow: rgba(255, 255, 255, 0.75);
+
+    /* Doubles team frame (matches registration .doubles-team-box) */
+    --fc-doubles-gold: #c5a059;
+    --fc-doubles-gold-glow: #f5e3b5;
+
+    /* Dart counters (all games) */
+    --fc-dart-dot-size: 8px;
+    --fc-dart-stack-gap: 5px;
+    --fc-duo-dart-gap: -2px; /* distance from avatar pair (lower = closer) */
+    --fc-dart-dot-idle-bg: rgba(255, 255, 255, 0.2);
+    --fc-dart-dot-idle-border: 1px solid rgba(255, 255, 255, 0.45);
+    --fc-dart-thrown: #c5a059;
+    --fc-dart-thrown-glow: #f5e3b5;
+}
+
+/* ===== BEGIN FC_PLAYER_BADGE v1 =====
+   Standard in-play identity: circle avatar + colored name plate on the rim.
+   Pattern sourced from Derby/Limbo. Use FC_renderPlayerBadge() or markup:
+     <div class="fc-player-badge color-N">
+       <div class="avatar-box">...</div>
+       <div class="player-name-plate">NAME</div>
+     </div>
+   Also styles legacy anchors (.right-avatar-anchor) that already use
+   .avatar-box + .player-name-plate so Derby/Limbo stay in sync.
+   Revert: delete this whole block + undo game HTML badge wiring. */
+
+.fc-player-badge,
+.right-avatar-anchor {
+    position: relative;
+    width: calc(var(--fc-avatar-inplay) + 18px);
+    height: calc(var(--fc-avatar-inplay) + 18px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.fc-player-badge .avatar-box,
+.right-avatar-anchor .avatar-box {
+    width: var(--fc-avatar-inplay);
+    height: var(--fc-avatar-inplay);
+    border-radius: 50%;
+    border: 4px solid #fff;
+    background: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    box-sizing: border-box;
+}
+
+.fc-player-badge .avatar-box img,
+.right-avatar-anchor .avatar-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fc-player-badge .avatar-box .initials,
+.right-avatar-anchor .avatar-box .initials {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--fc-initials);
+}
+
+.fc-player-badge .player-name-plate,
+.right-avatar-anchor .player-name-plate {
+    position: absolute;
+    bottom: -6px;
+    /* Was 2 — the active-turn orbit bead (.fc-active-orbit, z-index:6) spins around the
+       avatar's full ring and passes right through this overlapping region, rendering on
+       top of the name whenever it crosses the bottom. Needs to stay above it. */
+    z-index: 7;
+    /* Sized for the 1920x1080 @ 8ft standard — was 0.65rem/75px, unreadable at
+       distance; max-width/padding widened to match so names truncate less, not more. */
+    padding: 3px 9px;
+    border-radius: 3px;
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 1.5px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-color: #888;
+}
+
+/* Color borders + plates — badge carries color-N, or parent does */
+.fc-player-badge.color-0 .avatar-box,
+.color-0 .fc-player-badge .avatar-box,
+.color-0 .right-avatar-anchor .avatar-box,
+.color-0 > .avatar-box { border-color: var(--fc-p0); }
+.fc-player-badge.color-0 .player-name-plate,
+.color-0 .fc-player-badge .player-name-plate,
+.color-0 .right-avatar-anchor .player-name-plate,
+.color-0 > .player-name-plate,
+.color-0 .player-name-plate { background-color: var(--fc-p0); }
+
+.fc-player-badge.color-1 .avatar-box,
+.color-1 .fc-player-badge .avatar-box,
+.color-1 .right-avatar-anchor .avatar-box,
+.color-1 > .avatar-box { border-color: var(--fc-p1); }
+.fc-player-badge.color-1 .player-name-plate,
+.color-1 .fc-player-badge .player-name-plate,
+.color-1 .right-avatar-anchor .player-name-plate,
+.color-1 > .player-name-plate,
+.color-1 .player-name-plate { background-color: var(--fc-p1); }
+
+.fc-player-badge.color-2 .avatar-box,
+.color-2 .fc-player-badge .avatar-box,
+.color-2 .right-avatar-anchor .avatar-box,
+.color-2 > .avatar-box { border-color: var(--fc-p2); }
+.fc-player-badge.color-2 .player-name-plate,
+.color-2 .fc-player-badge .player-name-plate,
+.color-2 .right-avatar-anchor .player-name-plate,
+.color-2 > .player-name-plate,
+.color-2 .player-name-plate { background-color: var(--fc-p2); }
+
+.fc-player-badge.color-3 .avatar-box,
+.color-3 .fc-player-badge .avatar-box,
+.color-3 .right-avatar-anchor .avatar-box,
+.color-3 > .avatar-box { border-color: var(--fc-p3); }
+.fc-player-badge.color-3 .player-name-plate,
+.color-3 .fc-player-badge .player-name-plate,
+.color-3 .right-avatar-anchor .player-name-plate,
+.color-3 > .player-name-plate,
+.color-3 .player-name-plate { background-color: var(--fc-p3); }
+
+.fc-player-badge.color-4 .avatar-box,
+.color-4 .fc-player-badge .avatar-box,
+.color-4 .right-avatar-anchor .avatar-box,
+.color-4 > .avatar-box { border-color: var(--fc-p4); }
+.fc-player-badge.color-4 .player-name-plate,
+.color-4 .fc-player-badge .player-name-plate,
+.color-4 .right-avatar-anchor .player-name-plate,
+.color-4 > .player-name-plate,
+.color-4 .player-name-plate { background-color: var(--fc-p4); }
+
+.fc-player-badge.color-5 .avatar-box,
+.color-5 .fc-player-badge .avatar-box,
+.color-5 .right-avatar-anchor .avatar-box,
+.color-5 > .avatar-box { border-color: var(--fc-p5); }
+.fc-player-badge.color-5 .player-name-plate,
+.color-5 .fc-player-badge .player-name-plate,
+.color-5 .right-avatar-anchor .player-name-plate,
+.color-5 > .player-name-plate,
+.color-5 .player-name-plate { background-color: var(--fc-p5); }
+
+.fc-player-badge.color-6 .avatar-box,
+.color-6 .fc-player-badge .avatar-box,
+.color-6 .right-avatar-anchor .avatar-box,
+.color-6 > .avatar-box { border-color: var(--fc-p6); }
+.fc-player-badge.color-6 .player-name-plate,
+.color-6 .fc-player-badge .player-name-plate,
+.color-6 .right-avatar-anchor .player-name-plate,
+.color-6 > .player-name-plate,
+.color-6 .player-name-plate { background-color: var(--fc-p6); }
+
+.fc-player-badge.color-7 .avatar-box,
+.color-7 .fc-player-badge .avatar-box,
+.color-7 .right-avatar-anchor .avatar-box,
+.color-7 > .avatar-box { border-color: var(--fc-p7); }
+.fc-player-badge.color-7 .player-name-plate,
+.color-7 .fc-player-badge .player-name-plate,
+.color-7 .right-avatar-anchor .player-name-plate,
+.color-7 > .player-name-plate,
+.color-7 .player-name-plate { background-color: var(--fc-p7); }
+
+/* Demolition/Quackshot dock: same frame + name-plate geometry as standard badge */
+.fc-player-badge.fc-player-badge--dock {
+    width: 100%;
+    height: calc(var(--fc-avatar-inplay) + 18px);
+    min-height: calc(var(--fc-avatar-inplay) + 18px);
+    margin-bottom: 8px;
+}
+.fc-player-badge.fc-player-badge--dock .avatar-group-stack {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.fc-player-badge.fc-player-badge--dock .player-name-plate {
+    bottom: -6px; /* match standard .fc-player-badge plate */
+    max-width: 110px; /* was 75px — matches the base .player-name-plate 1920x1080@8ft size */
+}
+
+/* ===== END FC_PLAYER_BADGE v1 ===== */
+
+/* ===== BEGIN FC_ACTIVE_RING v1 =====
+   Shared active-player avatar treatment: white ring + soft glow pulse.
+   Does NOT use transform/scale (won't shift alignment).
+   Revert: delete this whole block + restore snippets in
+   _backup-before-active-ring.css into each game file. */
+
+@keyframes fc-active-ring-pulse {
+    0%, 100% {
+        box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.85),
+            0 0 10px 2px var(--fc-active-glow),
+            0 0 22px 4px var(--fc-active-glow),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+    50% {
+        box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.95),
+            0 0 16px 3px var(--fc-active-glow),
+            0 0 32px 8px var(--fc-active-glow),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+}
+
+/* Don't let layout containers clip the glow */
+.player-container.active-turn,
+.player-container.active-turn .right-avatar-anchor,
+.player-container.active-turn .fc-player-badge,
+.derby-row.active-turn,
+.derby-row.active-turn .fc-player-badge,
+.sb-player.active-turn,
+.sb-player.active-turn .fc-player-badge,
+.score-column.active-turn,
+.score-column.active-turn .fc-player-badge,
+.edge-player.active-turn,
+.team-row.active-turn,
+.team-row.active-turn .team-identity,
+.team-row.active-turn .fc-player-badge {
+    overflow: visible;
+}
+
+/* Limbo (+ badge path). transition:none so game-local "transition: all" can't kill the pulse */
+.player-container.active-turn .avatar-box,
+.player-container.active-turn .fc-player-badge .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+
+.player-container.color-0.active-turn { --fc-active-glow: rgba(var(--fc-p0-rgb), 0.85); }
+.player-container.color-1.active-turn { --fc-active-glow: rgba(var(--fc-p1-rgb), 0.85); }
+.player-container.color-2.active-turn { --fc-active-glow: rgba(var(--fc-p2-rgb), 0.85); }
+.player-container.color-3.active-turn { --fc-active-glow: rgba(var(--fc-p3-rgb), 0.85); }
+.player-container.color-4.active-turn { --fc-active-glow: rgba(var(--fc-p4-rgb), 0.85); }
+.player-container.color-5.active-turn { --fc-active-glow: rgba(var(--fc-p5-rgb), 0.85); }
+.player-container.color-6.active-turn { --fc-active-glow: rgba(var(--fc-p6-rgb), 0.85); }
+.player-container.color-7.active-turn { --fc-active-glow: rgba(var(--fc-p7-rgb), 0.85); }
+
+/* Derby */
+.derby-row.active-turn .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+
+.derby-row.color-0.active-turn { --fc-active-glow: rgba(var(--fc-p0-rgb), 0.85); }
+.derby-row.color-1.active-turn { --fc-active-glow: rgba(var(--fc-p1-rgb), 0.85); }
+.derby-row.color-2.active-turn { --fc-active-glow: rgba(var(--fc-p2-rgb), 0.85); }
+.derby-row.color-3.active-turn { --fc-active-glow: rgba(var(--fc-p3-rgb), 0.85); }
+.derby-row.color-4.active-turn { --fc-active-glow: rgba(var(--fc-p4-rgb), 0.85); }
+.derby-row.color-5.active-turn { --fc-active-glow: rgba(var(--fc-p5-rgb), 0.85); }
+.derby-row.color-6.active-turn { --fc-active-glow: rgba(var(--fc-p6-rgb), 0.85); }
+.derby-row.color-7.active-turn { --fc-active-glow: rgba(var(--fc-p7-rgb), 0.85); }
+
+/* Demolition — pillar lane colors */
+.pillar-lane-wrapper.current-turn .dock-avatar-frame,
+.pillar-lane-wrapper.current-turn .fc-player-badge .dock-avatar-frame {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+/* Doubles: only the active thrower's shared badge pulses */
+.pillar-lane-wrapper.current-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+.lane-0.current-turn { --fc-active-glow: var(--pillar-0); }
+.lane-1.current-turn { --fc-active-glow: var(--pillar-1); }
+.lane-2.current-turn { --fc-active-glow: var(--pillar-2); }
+.lane-3.current-turn { --fc-active-glow: var(--pillar-3); }
+.lane-4.current-turn { --fc-active-glow: var(--pillar-4); }
+.lane-5.current-turn { --fc-active-glow: var(--pillar-5); }
+
+/* Cricket */
+.sb-player.active-turn .fc-player-badge .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+
+.sb-player.color-0.active-turn { --fc-active-glow: rgba(var(--fc-p0-rgb), 0.85); }
+.sb-player.color-1.active-turn { --fc-active-glow: rgba(var(--fc-p1-rgb), 0.85); }
+.sb-player.color-2.active-turn { --fc-active-glow: rgba(var(--fc-p2-rgb), 0.85); }
+.sb-player.color-3.active-turn { --fc-active-glow: rgba(var(--fc-p3-rgb), 0.85); }
+.sb-player.color-4.active-turn { --fc-active-glow: rgba(var(--fc-p4-rgb), 0.85); }
+.sb-player.color-5.active-turn { --fc-active-glow: rgba(var(--fc-p5-rgb), 0.85); }
+.sb-player.color-6.active-turn { --fc-active-glow: rgba(var(--fc-p6-rgb), 0.85); }
+.sb-player.color-7.active-turn { --fc-active-glow: rgba(var(--fc-p7-rgb), 0.85); }
+
+/* Quackshot */
+.score-column.active-turn .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+.score-column.active-turn .score-player.color-0,
+.score-column.active-turn .fc-player-badge.color-0 { --fc-active-glow: rgba(var(--fc-p0-rgb), 0.85); }
+.score-column.active-turn .score-player.color-1,
+.score-column.active-turn .fc-player-badge.color-1 { --fc-active-glow: rgba(var(--fc-p1-rgb), 0.85); }
+.score-column.active-turn .score-player.color-2,
+.score-column.active-turn .fc-player-badge.color-2 { --fc-active-glow: rgba(var(--fc-p2-rgb), 0.85); }
+.score-column.active-turn .score-player.color-3,
+.score-column.active-turn .fc-player-badge.color-3 { --fc-active-glow: rgba(var(--fc-p3-rgb), 0.85); }
+.score-column.active-turn .score-player.color-4,
+.score-column.active-turn .fc-player-badge.color-4 { --fc-active-glow: rgba(var(--fc-p4-rgb), 0.85); }
+.score-column.active-turn .score-player.color-5,
+.score-column.active-turn .fc-player-badge.color-5 { --fc-active-glow: rgba(var(--fc-p5-rgb), 0.85); }
+.score-column.active-turn .score-player.color-6,
+.score-column.active-turn .fc-player-badge.color-6 { --fc-active-glow: rgba(var(--fc-p6-rgb), 0.85); }
+.score-column.active-turn .score-player.color-7,
+.score-column.active-turn .fc-player-badge.color-7 { --fc-active-glow: rgba(var(--fc-p7-rgb), 0.85); }
+
+/* Shanghai */
+.team-row.active-turn .avatar-box,
+.team-row.active-turn .fc-player-badge .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+
+.team-row.color-0.active-turn { --fc-active-glow: rgba(var(--fc-p0-rgb), 0.85); }
+.team-row.color-1.active-turn { --fc-active-glow: rgba(var(--fc-p1-rgb), 0.85); }
+.team-row.color-2.active-turn { --fc-active-glow: rgba(var(--fc-p2-rgb), 0.85); }
+.team-row.color-3.active-turn { --fc-active-glow: rgba(var(--fc-p3-rgb), 0.85); }
+.team-row.color-4.active-turn { --fc-active-glow: rgba(var(--fc-p4-rgb), 0.85); }
+.team-row.color-5.active-turn { --fc-active-glow: rgba(var(--fc-p5-rgb), 0.85); }
+.team-row.color-6.active-turn { --fc-active-glow: rgba(var(--fc-p6-rgb), 0.85); }
+.team-row.color-7.active-turn { --fc-active-glow: rgba(var(--fc-p7-rgb), 0.85); }
+
+/* ===== END FC_ACTIVE_RING v1 ===== */
+
+/* ===== BEGIN FC_ACTIVE_ORBIT v1 =====
+   Single bead on the avatar border ring + soft glow trail (no trailing dots).
+   Sized to --fc-avatar-inplay; place via FC_renderPlayerBadge({ orbit: true }).
+   Knobs: --fc-orbit-duration / --fc-orbit-bead / --fc-orbit-trail-span / --fc-orbit-ring
+   Wired via FC_renderPlayerBadge({ orbit }) / FC_renderDoublesDuo / Demolition dock pin.
+   Revert: delete this block + FC_renderActiveOrbitHtml + undo badge orbit option. */
+:root {
+    --fc-orbit-duration: 1s;
+    --fc-orbit-bead: 4px; /* fits inside the 4px avatar border */
+    --fc-orbit-trail-span: 190deg;
+    --fc-orbit-ring: 4px; /* match .avatar-box border width */
+}
+
+.fc-player-badge > .fc-active-orbit {
+    position: absolute;
+    width: var(--fc-avatar-inplay);
+    height: var(--fc-avatar-inplay);
+    left: 50%;
+    top: 50%;
+    margin-left: calc(var(--fc-avatar-inplay) / -2);
+    margin-top: calc(var(--fc-avatar-inplay) / -2);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 6;
+    overflow: visible;
+}
+/* Demolition singles dock: orbit sits on pin around the frame (frame clips img) */
+.dock-avatar-pin {
+    position: relative;
+    width: var(--fc-avatar-inplay);
+    height: var(--fc-avatar-inplay);
+    flex-shrink: 0;
+    --fc-orbit-ring: 4px; /* match dock-avatar-frame / shared avatar-box */
+}
+.dock-avatar-pin > .fc-active-orbit {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 6;
+}
+.dock-avatar-pin .dock-avatar-frame {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    box-sizing: border-box;
+}
+
+
+.fc-active-orbit .fc-orbit-spin {
+    position: absolute;
+    inset: 0;
+    animation: fc-active-orbit-spin var(--fc-orbit-duration) linear infinite;
+}
+
+/* Soft luminous arc along the colored border */
+.fc-active-orbit .fc-orbit-trail {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent calc(360deg - var(--fc-orbit-trail-span)),
+        rgba(255, 255, 255, 0) calc(360deg - var(--fc-orbit-trail-span)),
+        rgba(255, 255, 255, 0.7) calc(360deg - 90deg),
+        rgba(255, 255, 255, 0.92) calc(360deg - 50deg),
+        #fff calc(360deg - 20deg),
+        #fff 360deg
+    );
+    /* Full border-width band so the trail reads clearly on the frame */
+    -webkit-mask-image: radial-gradient(
+        farthest-side,
+        transparent calc(100% - var(--fc-orbit-ring)),
+        #000 calc(100% - var(--fc-orbit-ring) + 0.5px),
+        #000 100%
+    );
+    mask-image: radial-gradient(
+        farthest-side,
+        transparent calc(100% - var(--fc-orbit-ring)),
+        #000 calc(100% - var(--fc-orbit-ring) + 0.5px),
+        #000 100%
+    );
+    /* Punch through saturated colors (lime etc.) */
+    mix-blend-mode: plus-lighter;
+}
+
+/* Quiet bead seated in the border frame (minimal glow) */
+.fc-active-orbit .fc-orbit-bead {
+    position: absolute;
+    left: 50%;
+    top: calc((var(--fc-orbit-ring) - var(--fc-orbit-bead)) / 2);
+    width: var(--fc-orbit-bead);
+    height: var(--fc-orbit-bead);
+    margin-left: calc(var(--fc-orbit-bead) / -2);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+@keyframes fc-active-orbit-spin {
+    to { transform: rotate(360deg); }
+}
+/* ===== END FC_ACTIVE_ORBIT v1 ===== */
+
+/* ===== BEGIN FC_DART_COUNTER v1 =====
+   Standard dart-counter size, stack gap, idle + thrown fill across games.
+   Knobs (on :root or a parent):
+     --fc-dart-dot-size / --fc-dart-stack-gap / --fc-duo-dart-gap
+     --fc-dart-thrown / --fc-dart-thrown-glow
+   Revert: delete this block + restore per-game dart CSS. */
+.dart-dot,
+.lane-dart-dot,
+.fc-duo-darts .dot,
+.fc-duo-darts .dart-dot,
+.fc-duo-darts .lane-dart-dot,
+.dart-hud .dot,
+.dart-dots .dot,
+.dart-dots .dart-dot {
+    width: var(--fc-dart-dot-size);
+    height: var(--fc-dart-dot-size);
+    border-radius: 50%;
+    background: var(--fc-dart-dot-idle-bg);
+    border: var(--fc-dart-dot-idle-border);
+    box-sizing: border-box;
+}
+.dart-dots,
+.dart-hud,
+.lane-dart-hud,
+.fc-duo-darts,
+.edge-darts-float {
+    gap: var(--fc-dart-stack-gap);
+}
+.dart-dot.thrown,
+.dot.thrown,
+.lane-dart-dot.thrown,
+.fc-duo-darts .dot.thrown,
+.fc-duo-darts .lane-dart-dot.thrown,
+.fc-duo-darts .dart-dot.thrown,
+.dart-hud .dot.thrown,
+.dart-dots .dot.thrown {
+    background: var(--fc-dart-thrown);
+    border-color: var(--fc-dart-thrown-glow);
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.7);
+}
+/* ===== END FC_DART_COUNTER v1 ===== */
+
+/* ===== BEGIN FC_DOUBLES_DUO v1 =====
+   Side-by-side badges + dart column (Demolition doubles pattern).
+   Per-game knobs (set on .fc-duo-row or a parent):
+     --fc-duo-pull      badge nest overlap (default 14px)
+     --fc-duo-dart-gap  space before dart column (default -2px; see :root)
+   Revert: delete this block + FC_renderDoublesDuo in shared-player-theme.js */
+.fc-duo-row {
+    --fc-duo-pull: 14px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.fc-duo-row.is-duo .fc-duo-stack {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+.fc-duo-row.is-duo .fc-duo-stack > .fc-player-badge {
+    flex-shrink: 0;
+}
+.fc-duo-row.is-duo .fc-duo-stack > .fc-player-badge + .fc-player-badge {
+    margin-left: calc(-1 * var(--fc-duo-pull));
+}
+.fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box {
+    /* glow replaced by FC_ACTIVE_ORBIT */
+    z-index: 2;
+    position: relative;
+}
+.fc-duo-darts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fc-dart-stack-gap);
+    margin-left: var(--fc-duo-dart-gap);
+    flex-shrink: 0;
+    justify-content: center;
+    align-items: center;
+}
+.fc-duo-overlay-pair {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Doubles: only the active thrower pulses */
+.player-container.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box,
+.derby-row.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box,
+.sb-player.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box,
+.score-column.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box,
+.edge-player.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box,
+.team-row.active-turn .fc-duo-row.is-duo .fc-player-badge:not(.thrower-active) .avatar-box {
+    animation: none;
+}
+.player-container.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.derby-row.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.sb-player.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.score-column.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.edge-player.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.team-row.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box {
+    animation: none; /* was fc-active-ring-pulse; FC_ACTIVE_ORBIT */
+    transition: none;
+}
+/* ===== END FC_DOUBLES_DUO v1 ===== */
+/* All games — ring/glow off; FC_ACTIVE_ORBIT is the active indicator.
+   Restore pulse from _backup-fc-active-ring.css if needed. */
+.player-container.active-turn .avatar-box,
+.player-container.active-turn .fc-player-badge .avatar-box,
+.derby-row.active-turn .avatar-box,
+.derby-row.active-turn .fc-player-badge .avatar-box,
+.sb-player.active-turn .fc-player-badge .avatar-box,
+.score-column.active-turn .avatar-box,
+.score-column.active-turn .fc-player-badge .avatar-box,
+.team-row.active-turn .avatar-box,
+.team-row.active-turn .fc-player-badge .avatar-box,
+.edge-player.active-turn .fc-player-badge .avatar-box,
+.pillar-lane-wrapper.current-turn .dock-avatar-frame,
+.pillar-lane-wrapper.current-turn .fc-player-badge .dock-avatar-frame,
+.pillar-lane-wrapper.current-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.player-container.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.derby-row.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.sb-player.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.score-column.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.edge-player.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box,
+.team-row.active-turn .fc-duo-row.is-duo .fc-player-badge.thrower-active .avatar-box {
+    animation: none;
+    transition: none;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+

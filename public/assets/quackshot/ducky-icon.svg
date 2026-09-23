@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Compact score-tracker ducky with tiny target -->
+  <ellipse cx="34" cy="40" rx="18" ry="13" fill="#7ED6F7"/>
+  <ellipse cx="40" cy="41" rx="9" ry="6" fill="#5BC4EF"/>
+  <circle cx="24" cy="24" r="12" fill="#7ED6F7"/>
+  <path d="M14 24 L4 22 L4 28 L14 26 Z" fill="#F4C430"/>
+  <circle cx="22" cy="22" r="2.2" fill="#1A2744"/>
+  <circle cx="36" cy="40" r="8" fill="#3DDC84"/>
+  <circle cx="36" cy="40" r="4.5" fill="#FF2D7B"/>
+</svg>

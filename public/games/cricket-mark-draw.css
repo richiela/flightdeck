@@ -1,0 +1,34 @@
+/* Styles for public/games/cricket-mark-draw.js — used by Cricket mark-hit dart callouts. */
+
+.fc-cricket-mark-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+.fc-mk {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke-dashoffset 0.35s ease-out, opacity 0.12s ease;
+    opacity: 1;
+}
+
+.fc-mk-3 {
+    stroke-width: 2.4;
+}
+
+.fc-mk.is-pending {
+    opacity: 0;
+}
+
+.fc-mk.is-instant {
+    transition: none;
+}
+
+.fc-mk.is-drawn {
+    opacity: 1;
+}

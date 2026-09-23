@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>Shanghai</title>
+    <style>
+        :root {
+            --cream: #f3e6c8;
+            --cream-deep: #e8d4a8;
+            --ink: #1a1410;
+            --teal: #2ec4b6;
+            --teal-bright: #5ff0e0;
+            --bamboo: #5a8f3a;
+            --bamboo-dark: #3d6a28;
+            --gold: #c5a059;
+            --panel: rgba(255, 248, 230, 0.08);
+            --scroll-cream: #efe0b8; /* mid tone of .scroll-card gradient — board wire color */
+            --page-bg: radial-gradient(circle at 50% 28%, #c45a28 0%, #8a3a18 40%, #4a2010 100%);
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: var(--page-bg);
+            color: #fff;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted rgba(255, 255, 255, 0.45);
+            border-radius: 8px;
+        }
+        .window-game-title {
+            position: absolute;
+            bottom: -14px; left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: #fff;
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid #fff;
+            border-right: 4px solid #fff;
+        }
+
+        .arena {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            padding: 48px 36px 52px;
+            box-sizing: border-box;
+            gap: 28px;
+        }
+
+        /* —— Left scoreboard —— */
+        .score-pane {
+            flex: 1.15;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0px;
+            overflow: visible;
+        }
+
+        .team-row {
+            display: grid;
+            grid-template-columns: minmax(120px, 200px) 1fr auto;
+            align-items: center;
+            gap: 12px;
+            /* --sh-row-pad-v: row's own vertical padding. Only .is-cramped (6 players not
+               fitting the pane's real height) lowers it — renderScoreboard() decides. */
+            padding: var(--sh-row-pad-v, 10px) 14px;
+            border-radius: 10px;
+            background: transparent;
+            transition: background 0.25s ease;
+            overflow: visible;
+        }
+        .score-pane.is-doubles .team-row {
+            grid-template-columns: minmax(170px, 220px) 1fr auto;
+        }
+        .team-row.active-turn {
+            background: rgba(255, 255, 255, 0.16);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+        }
+
+        .team-identity {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            min-width: 0;
+            position: relative;
+            /* Room for absolute name plates (bottom: -6px) so circle+tag centers in the highlight.
+               Revert: remove this padding-bottom. --sh-identity-pad-b lowered only in .is-cramped. */
+            padding-bottom: var(--sh-identity-pad-b, 14px);
+        }
+        /* Singles only — don't scale duo badges (breaks nest + dart park) */
+        .team-identity:not(.is-duo) .fc-player-badge {
+            transform: scale(var(--sh-avatar-scale, 0.82));
+            transform-origin: left center;
+        }
+        .team-identity .dart-hud,
+        .team-identity .dart-dots {
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            margin-left: -20px;
+        }
+        .team-identity .dot {
+            width: var(--fc-dart-dot-size);
+            height: var(--fc-dart-dot-size);
+            border-radius: 50%;
+            box-sizing: border-box;
+        }
+
+        /* Doubles: same duo park as Limbo (pull + dart gap + absolute darts) */
+        .team-identity.is-duo .fc-duo-row {
+            --fc-duo-pull: 14px;
+            --fc-duo-dart-gap: -4px;
+        }
+        .team-identity.is-duo .fc-duo-row.is-duo {
+            position: relative;
+            justify-content: flex-start;
+            width: max-content;
+        }
+        .team-identity.is-duo .fc-duo-darts {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: var(--fc-duo-dart-gap);
+            opacity: 0;
+            transition: opacity 0.3s, margin-left 0.15s;
+            background: transparent;
+            padding: 6px 4px;
+            border-radius: 0 4px 4px 0;
+            border: 2px solid #fff;
+            border-left: none;
+            pointer-events: none;
+        }
+        .team-row.active-turn .team-identity.is-duo .fc-duo-darts {
+            opacity: 1;
+        }
+
+        .round-cells {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(28px, 1fr));
+            gap: 4px;
+            align-items: center;
+            justify-items: center;
+        }
+        .round-cell {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.92);
+            min-width: 1.4em;
+            text-align: center;
+        }
+        .round-cell.is-empty {
+            color: rgba(255, 255, 255, 0.35);
+            font-weight: 600;
+        }
+        .round-cell.is-current {
+            color: var(--teal-bright);
+        }
+
+        .total-score {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            min-width: 2.2em;
+            text-align: right;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        }
+
+        /* —— Right scroll panel —— */
+        .scroll-pane {
+            flex: 0 0 min(560px, 48vw);
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            min-width: 0;
+            /* Shorter scroll: 100px inset top/bottom. Revert: remove this margin. */
+            margin: 75px 0;
+        }
+
+        .scroll-card {
+            position: relative;
+            width: 100%;
+            max-width: 540px;
+            display: flex;
+            flex-direction: column;
+            background:
+                linear-gradient(180deg, #f7ebcf 0%, #efe0b8 45%, #e6d3a4 100%);
+            color: var(--ink);
+            border-radius: 4px;
+            box-shadow:
+                0 10px 28px rgba(0,0,0,0.35),
+                inset 0 0 40px rgba(139, 105, 40, 0.12);
+            padding: 22px 18px 18px;
+            box-sizing: border-box;
+        }
+        .scroll-card::before,
+        .scroll-card::after {
+            content: '';
+            position: absolute;
+            left: -10px; right: -10px;
+            height: 22px;
+            border-radius: 11px;
+            background: linear-gradient(180deg, #7cb84f 0%, var(--bamboo) 45%, var(--bamboo-dark) 100%);
+            box-shadow:
+                inset 0 2px 0 rgba(255,255,255,0.25),
+                inset 0 -2px 0 rgba(0,0,0,0.25),
+                0 3px 8px rgba(0,0,0,0.25);
+            z-index: 2;
+        }
+        .scroll-card::before { top: -11px; }
+        .scroll-card::after { bottom: -11px; }
+
+        .round-tracker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            padding-top: 4px;
+        }
+        .round-tracker .lbl {
+            font-size: 0.78rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(26, 20, 16, 0.7);
+        }
+        .round-dots {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .round-dot {
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            border: 2px solid #1a1410;
+            background: transparent;
+            box-sizing: border-box;
+        }
+        .round-dot.filled {
+            background: #1a1410;
+        }
+
+        .board-stage {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            padding: 4px 0 8px;
+        }
+        .board-wrap {
+            position: relative;
+            width: min(500px, 100%);
+            aspect-ratio: 1;
+        }
+        .dartboard-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            filter: drop-shadow(0 8px 18px rgba(0,0,0,0.28));
+        }
+        .board-base { fill: #1a1620; }
+        .board-disc {
+            fill: none;
+            stroke: var(--scroll-cream);
+            stroke-width: 2.5;
+        }
+        .board-outer-ring {
+            fill: none;
+            stroke: var(--scroll-cream);
+            stroke-width: 0.7;
+        }
+        .board-ring {
+            fill: none;
+            stroke: var(--scroll-cream);
+            stroke-width: 1;
+            opacity: 0.85;
+        }
+        .board-bull {
+            fill: #121018;
+            stroke: var(--scroll-cream);
+            stroke-width: 0.7;
+        }
+        .board-sub-segment {
+            stroke: var(--scroll-cream);
+            stroke-width: 0.7;
+            paint-order: fill stroke;
+            transition: fill 0.25s ease;
+        }
+        .board-sub-segment.target-lit {
+            filter: brightness(1.15);
+        }
+        .board-labels {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .target-number-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            font-size: 1.65rem;
+            font-weight: 900;
+            /* REVERT wedge-contrast: color: var(--teal); text-shadow: 0 1px 0 rgba(255,255,255,0.35); */
+            color: var(--ink);
+            text-shadow:
+                0 0 6px rgba(243, 230, 200, 0.95),
+                0 0 2px rgba(243, 230, 200, 1),
+                0 1px 0 rgba(243, 230, 200, 0.8);
+            letter-spacing: 1px;
+        }
+
+        /* —— Overlays: parchment scroll + bamboo (theme-native, not Cricket clone) —— */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            width: 520px; max-width: 90%;
+            background: rgba(20, 12, 8, 0.94);
+            border: 2px solid rgba(255,255,255,0.35);
+            border-radius: 14px;
+            padding: 28px 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55);
+            z-index: 10000;
+            display: none;
+            text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            margin: 0 0 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--teal-bright);
+        }
+        .help-overlay-board p {
+            margin: 0 0 10px;
+            line-height: 1.45;
+            color: rgba(255,255,255,0.88);
+            font-size: 0.95rem;
+            text-align: left;
+        }
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .sh-takeover {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 50% 35%, rgba(196, 90, 40, 0.35), transparent 60%),
+                rgba(28, 12, 8, 0.88);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .sh-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            animation: shWashIn 0.28s ease forwards;
+        }
+        .sh-takeover.mode-next.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(46, 196, 182, 0.22), transparent 55%),
+                radial-gradient(ellipse at 50% 70%, rgba(196, 90, 40, 0.2), transparent 50%),
+                rgba(22, 10, 6, 0.9);
+        }
+        .sh-takeover.mode-draw.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(197, 160, 89, 0.28), transparent 55%),
+                rgba(20, 12, 6, 0.92);
+        }
+        .sh-takeover.mode-winner.active {
+            background:
+                radial-gradient(ellipse at 50% 28%, rgba(46, 196, 182, 0.4), transparent 48%),
+                radial-gradient(ellipse at 50% 72%, rgba(197, 160, 89, 0.25), transparent 55%),
+                rgba(8, 4, 2, 0.94);
+            z-index: 600;
+            animation: shWashIn 0.28s ease forwards, shWinnerPulse 2.4s ease-in-out 0.45s infinite;
+        }
+
+        /* Full-screen winner FX (petals + lanterns + flash) */
+        .sh-win-flash {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            opacity: 0;
+            background: radial-gradient(circle at 50% 40%, rgba(255, 248, 220, 0.55), transparent 58%);
+        }
+        .mode-winner.active .sh-win-flash {
+            animation: shWinFlash 0.75s ease-out 0.02s forwards;
+        }
+        .sh-win-fx {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            overflow: hidden; display: none;
+        }
+        .mode-winner .sh-win-fx { display: block; }
+        .sh-petal {
+            position: absolute;
+            width: var(--w, 14px); height: var(--h, 10px);
+            border-radius: 60% 40% 55% 45%;
+            background: var(--c, #f7ebcf);
+            opacity: 0;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+        }
+        .mode-winner.active .sh-petal {
+            animation: shPetalFall var(--dur, 4.5s) linear var(--delay, 0s) infinite;
+        }
+        .sh-lantern {
+            position: absolute;
+            width: var(--size, 18px); height: calc(var(--size, 18px) * 1.3);
+            border-radius: 42% 42% 48% 48%;
+            background: radial-gradient(circle at 40% 28%, #ffe7a0, #e8a020 55%, #c45a28 100%);
+            box-shadow: 0 0 18px rgba(255, 180, 60, 0.55), 0 0 4px rgba(255, 220, 140, 0.85);
+            opacity: 0;
+        }
+        .sh-lantern::after {
+            content: '';
+            position: absolute;
+            left: 50%; bottom: -9px;
+            width: 2px; height: 10px;
+            background: rgba(26,20,16,0.45);
+            transform: translateX(-50%);
+        }
+        .mode-winner.active .sh-lantern {
+            animation: shLanternRise var(--dur, 6s) ease-in-out var(--delay, 0s) infinite;
+        }
+
+        /* Floating ink seals in the wash (decorative) */
+        .sh-ink-wash {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+        }
+        .sh-ink-blob {
+            position: absolute;
+            width: var(--size, 120px); height: var(--size, 120px);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(26,20,16,0.35) 0%, transparent 70%);
+            opacity: 0;
+            transform: scale(0.6);
+        }
+        .sh-takeover.active .sh-ink-blob {
+            animation: shInkBloom 1.1s ease-out var(--delay, 0s) forwards;
+        }
+
+        /* The scroll — same language as in-game .scroll-card */
+        .sh-scroll {
+            position: relative;
+            z-index: 3;
+            width: min(420px, 86vw);
+            margin: 18px 0;
+            padding: 28px 28px 24px;
+            box-sizing: border-box;
+            text-align: center;
+            color: var(--ink);
+            background:
+                linear-gradient(180deg, #f7ebcf 0%, #efe0b8 45%, #e6d3a4 100%);
+            border-radius: 3px;
+            box-shadow:
+                0 18px 48px rgba(0,0,0,0.45),
+                inset 0 0 48px rgba(139, 105, 40, 0.14);
+            opacity: 0;
+            transform: scaleY(0.12) scaleX(0.92);
+            transform-origin: center top;
+            filter: blur(4px);
+        }
+        .sh-takeover.active .sh-scroll {
+            animation: shScrollUnfurl 0.55s cubic-bezier(0.2, 0.85, 0.25, 1) 0.06s forwards;
+        }
+        .mode-winner.active .sh-scroll {
+            width: min(420px, 90%);
+            animation: shWinnerScrollSlam 0.7s cubic-bezier(0.15, 0.85, 0.3, 1.05) 0.08s forwards;
+        }
+        .mode-draw .sh-scroll {
+            width: min(520px, 92vw);
+        }
+
+        /* Bamboo rods — shared with playboard scroll */
+        .sh-scroll::before,
+        .sh-scroll::after {
+            content: '';
+            position: absolute;
+            left: -12px; right: -12px;
+            height: 24px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #7cb84f 0%, var(--bamboo) 45%, var(--bamboo-dark) 100%);
+            box-shadow:
+                inset 0 2px 0 rgba(255,255,255,0.28),
+                inset 0 -2px 0 rgba(0,0,0,0.28),
+                0 4px 10px rgba(0,0,0,0.28);
+            z-index: 4;
+        }
+        .sh-scroll::before { top: -12px; }
+        .sh-scroll::after { bottom: -12px; }
+
+        .sh-scroll-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Red/teal wax seal */
+        .sh-seal {
+            width: 64px; height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1.1;
+            text-align: center;
+            color: #f7ebcf;
+            background:
+                radial-gradient(circle at 35% 30%, #ff6b5a, #c43a2a 55%, #8a1e14 100%);
+            border: 3px solid rgba(255, 220, 180, 0.45);
+            box-shadow:
+                0 0 0 2px rgba(90, 20, 12, 0.5),
+                0 6px 16px rgba(0,0,0,0.35);
+            opacity: 0;
+            transform: scale(1.8) rotate(-18deg);
+        }
+        .mode-next .sh-seal {
+            background: radial-gradient(circle at 35% 30%, #5ff0e0, #2ec4b6 55%, #1a8a80 100%);
+            border-color: rgba(200, 255, 245, 0.45);
+            box-shadow: 0 0 0 2px rgba(20, 80, 70, 0.45), 0 6px 16px rgba(0,0,0,0.35);
+        }
+        .mode-draw .sh-seal {
+            background: radial-gradient(circle at 35% 30%, #e8d090, #c5a059 55%, #8a6a28 100%);
+            color: #1a1410;
+            border-color: rgba(255, 240, 200, 0.5);
+        }
+        .mode-winner .sh-seal {
+            background: radial-gradient(circle at 35% 30%, #5ff0e0, #2ec4b6 40%, #c5a059 100%);
+            box-shadow:
+                0 0 0 2px rgba(20, 80, 70, 0.4),
+                0 0 20px rgba(46, 196, 182, 0.45),
+                0 6px 16px rgba(0,0,0,0.35);
+        }
+        .sh-takeover.active .sh-seal {
+            animation: shSealStamp 0.5s cubic-bezier(0.15, 0.9, 0.3, 1.15) 0.28s forwards;
+        }
+
+        .sh-callboard {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-style: italic;
+            font-size: 1.15rem;
+            letter-spacing: 1px;
+            color: var(--teal);
+            margin: 0;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        .mode-next .sh-callboard { color: #1a8a80; }
+        .mode-draw .sh-callboard { color: #8a6a28; }
+        .mode-winner .sh-callboard { color: #1a8a80; }
+        .sh-takeover.active .sh-callboard {
+            animation: shInkIn 0.4s ease 0.38s forwards;
+        }
+        .sh-callboard::before,
+        .sh-callboard::after {
+            content: '❧';
+            font-style: normal;
+            font-size: 0.7rem;
+            margin: 0 10px;
+            opacity: 0.65;
+        }
+
+        /* Jade ring around avatar */
+        .sh-saddle {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 18px);
+            height: calc(var(--fc-avatar-overlay) + 18px);
+            border-radius: 50%;
+            background: linear-gradient(145deg, #f7ebcf, #e6d3a4);
+            border: 4px solid var(--ink);
+            box-shadow:
+                0 0 0 5px var(--teal),
+                0 10px 24px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: translateY(24px) scale(0.85);
+        }
+        .sh-saddle.duo-wrap {
+            width: auto; height: auto;
+            border-radius: 0; background: transparent; border: none;
+            box-shadow: none; gap: 14px;
+        }
+        .mode-next .sh-saddle {
+            box-shadow: 0 0 0 5px #1a8a80, 0 10px 24px rgba(0,0,0,0.3);
+        }
+        .mode-draw .sh-saddle {
+            box-shadow: 0 0 0 5px var(--gold), 0 10px 24px rgba(0,0,0,0.3);
+        }
+        .mode-winner .sh-saddle {
+            box-shadow:
+                0 0 0 5px var(--teal),
+                0 0 0 10px rgba(46, 196, 182, 0.28),
+                0 12px 28px rgba(0,0,0,0.35);
+        }
+        .sh-takeover.active .sh-saddle {
+            animation: shRiseIn 0.45s cubic-bezier(0.2, 0.85, 0.25, 1) 0.42s forwards;
+        }
+
+        .sh-avatar {
+            width: var(--fc-avatar-overlay);
+            height: var(--fc-avatar-overlay);
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid var(--ink);
+            background: #2a1810;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sh-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .sh-avatar .initials {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+        }
+        .sh-duo {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+        .sh-duo .sh-avatar {
+            width: calc(var(--fc-avatar-overlay) * 0.86);
+            height: calc(var(--fc-avatar-overlay) * 0.86);
+            box-shadow: 0 0 0 4px var(--teal), 0 8px 18px rgba(0,0,0,0.28);
+        }
+        .mode-draw .sh-duo .sh-avatar {
+            box-shadow: 0 0 0 4px var(--gold), 0 8px 18px rgba(0,0,0,0.28);
+        }
+        .sh-draw-row {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+        .sh-draw-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .sh-draw-col .sh-name {
+            font-size: 1.25rem;
+            margin: 0;
+            color: var(--ink);
+            text-shadow: none;
+        }
+
+        .sh-name {
+            font-size: 2.55rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin: 2px 0 0;
+            color: var(--ink);
+            opacity: 0;
+            transform: translateY(12px);
+            text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+        }
+        .sh-takeover.active .sh-name {
+            animation: shInkIn 0.4s ease 0.5s forwards;
+        }
+        .sh-quip {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-style: italic;
+            font-size: 1.1rem;
+            letter-spacing: 0.5px;
+            color: rgba(26, 20, 16, 0.7);
+            margin: 0;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        .mode-winner .sh-quip { color: #1a8a80; font-weight: 700; font-style: normal; letter-spacing: 1px; }
+        .sh-takeover.active .sh-quip {
+            animation: shInkIn 0.4s ease 0.58s forwards;
+        }
+
+        .sh-meta {
+            display: none;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 4px;
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        .mode-winner .sh-meta { display: flex; }
+        .mode-winner.active .sh-meta {
+            animation: shInkIn 0.4s ease 0.64s forwards;
+        }
+        .sh-chip {
+            padding: 5px 12px;
+            border-radius: 6px;
+            background: rgba(26, 20, 16, 0.08);
+            border: 1px solid rgba(26, 20, 16, 0.22);
+            font-weight: 800;
+            letter-spacing: 1px;
+            font-size: 0.88rem;
+            color: var(--ink);
+        }
+
+        @keyframes shWashIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes shWinnerPulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.06); }
+        }
+        @keyframes shWinFlash {
+            0% { opacity: 0; }
+            25% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes shPetalFall {
+            0% { opacity: 0; transform: translate3d(0, -12vh, 0) rotate(0deg); }
+            8% { opacity: 0.95; }
+            100% { opacity: 0; transform: translate3d(var(--drift, 40px), 110vh, 0) rotate(360deg); }
+        }
+        @keyframes shLanternRise {
+            0% { opacity: 0; transform: translate3d(0, 20vh, 0) scale(0.7); }
+            15% { opacity: 0.9; }
+            50% { opacity: 0.85; transform: translate3d(var(--drift, 24px), -40vh, 0) scale(1); }
+            100% { opacity: 0; transform: translate3d(calc(var(--drift, 24px) * -0.4), -110vh, 0) scale(0.85); }
+        }
+        @keyframes shInkBloom {
+            to { opacity: 0.55; transform: scale(1); }
+        }
+        @keyframes shScrollUnfurl {
+            to { opacity: 1; transform: scaleY(1) scaleX(1); filter: blur(0); }
+        }
+        @keyframes shWinnerScrollSlam {
+            0% { opacity: 0; transform: scale(1.55); filter: blur(10px); }
+            70% { opacity: 1; transform: scale(0.97); filter: blur(0); }
+            100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+        @keyframes shSealStamp {
+            0% { opacity: 0; transform: scale(1.8) rotate(-18deg); }
+            70% { opacity: 1; transform: scale(0.92) rotate(4deg); }
+            100% { opacity: 1; transform: scale(1) rotate(-6deg); }
+        }
+        @keyframes shRiseIn {
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes shInkIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Round announce — target scroll */
+        .sh-takeover.mode-round.active {
+            background: radial-gradient(ellipse at 50% 40%, rgba(20, 40, 38, 0.92), rgba(6, 10, 12, 0.96));
+        }
+        .sh-takeover.mode-round .sh-saddle { display: none; }
+        .sh-takeover.mode-round .sh-name { display: none; }
+        .sh-takeover.mode-round .sh-meta { display: none; }
+        .sh-takeover.mode-round .sh-target-num {
+            display: block;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(5rem, 12vw, 8rem);
+            font-weight: 700;
+            color: #1a1208;
+            line-height: 0.9;
+            margin: 8px 0 4px;
+            text-shadow: 0 2px 0 rgba(255,255,255,0.25);
+            animation: shTargetPop 0.55s cubic-bezier(0.2, 1.2, 0.3, 1) 0.2s both;
+        }
+        .sh-takeover:not(.mode-round) .sh-target-num { display: none; }
+        @keyframes shTargetPop {
+            from { transform: scale(0.4); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .sh-takeover.mode-round .sh-scroll {
+            width: min(380px, 86vw);
+        }
+        .sh-takeover.mode-round.mode-final .sh-scroll {
+            box-shadow:
+                0 18px 48px rgba(0,0,0,0.45),
+                0 0 0 3px rgba(197,160,89,0.55),
+                inset 0 0 48px rgba(139, 105, 40, 0.14);
+        }
+        .sh-takeover.mode-round .sh-tags {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+            margin-top: 10px;
+        }
+        .sh-takeover:not(.mode-round) .sh-tags { display: none; }
+        .sh-tag {
+            font-size: 0.72rem; font-weight: 800; letter-spacing: 1.5px;
+            padding: 5px 10px; border: 1px solid rgba(80,50,20,0.35);
+            color: #5a3a18; background: rgba(255,255,255,0.35);
+        }
+        .sh-tag.hot {
+            background: #c5a059; color: #1a1208; border-color: transparent;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">Shanghai</div>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Shanghai Rules</h3>
+        <p>• Eight rounds — round 1 targets 1, round 2 targets 2, … through 8.</p>
+        <p>• Three darts each turn. Only hits on the current number score.</p>
+        <p>• Single = N, Double = 2×N, Triple = 3×N. Everything else is zero.</p>
+        <p>• Highest total after round 8 wins. Ties are a draw.</p>
+    </div>
+
+    <div class="arena">
+        <div class="score-pane" id="scorePane"></div>
+
+        <div class="scroll-pane">
+            <div class="scroll-card">
+                <div class="round-tracker">
+                    <span class="lbl">Round</span>
+                    <div class="round-dots" id="roundDots"></div>
+                </div>
+                <div class="board-stage">
+                    <div class="board-wrap">
+                        <svg class="dartboard-svg" id="dartboardSvg" viewBox="0 0 220 220"></svg>
+                        <div class="board-labels" id="boardLabels"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sh-takeover" id="shanghaiOverlay" style="--fd-winner-video-border: #2ec4b6;">
+        <div class="sh-win-flash" aria-hidden="true"></div>
+        <div class="sh-win-fx" id="shWinFx" aria-hidden="true"></div>
+        <div class="sh-ink-wash" aria-hidden="true">
+            <span class="sh-ink-blob" style="--size:160px; --delay:0.05s; top:12%; left:8%;"></span>
+            <span class="sh-ink-blob" style="--size:110px; --delay:0.18s; top:62%; right:10%;"></span>
+            <span class="sh-ink-blob" style="--size:90px; --delay:0.1s; bottom:18%; left:22%;"></span>
+        </div>
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="sh-scroll" id="shCard">
+                    <div class="sh-scroll-inner">
+                        <div class="sh-seal" id="shSeal">Next</div>
+                        <div class="sh-callboard" id="shEyebrow">Up Next</div>
+                        <div class="sh-target-num" id="shTargetNum" aria-hidden="true">1</div>
+                        <div class="sh-tags" id="shTags"></div>
+                        <div class="sh-saddle" id="shSaddle">
+                            <div id="shAvatarHost"></div>
+                        </div>
+                        <h1 class="sh-name" id="shName">PLAYER</h1>
+                        <p class="sh-quip" id="shQuip">Your Throw</p>
+                        <div class="sh-meta" id="shMeta">
+                            <div class="sh-chip"><span id="shMetaScore">0</span> pts</div>
+                            <div class="sh-chip">8 Rounds</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const MAX_ROUNDS = 8;
+            const DARTBOARD_WHEEL = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+            const CX = 110;
+            const CY = 110;
+            /* Playable face = double outer (no dark halo past the double band). */
+            const SEGMENT_OUTER_R = 96;
+            const OUTER_R = SEGMENT_OUTER_R;
+            /* Proper double/triple radii (fractions of SEGMENT_OUTER_R ≈ real board).
+               Revert board zones: restore SEGMENTS_PER_NUMBER=3 equal bands + midRing. */
+            const BULL_R = SEGMENT_OUTER_R * 0.035;
+            const TRIPLE_INNER_R = SEGMENT_OUTER_R * 0.582;
+            const TRIPLE_OUTER_R = SEGMENT_OUTER_R * 0.629;
+            /* Match triple band thickness exactly */
+            const RING_WIDTH = TRIPLE_OUTER_R - TRIPLE_INNER_R;
+            const DOUBLE_OUTER_R = SEGMENT_OUTER_R;
+            const DOUBLE_INNER_R = DOUBLE_OUTER_R - RING_WIDTH;
+            const RADIAL_GAP = 0.55;
+            const TEAL = '#2ec4b6';
+            const MUTED = '#9a98a6';
+            const BOARD_ZONES = [
+                { id: 'inner-single', inner: BULL_R, outer: TRIPLE_INNER_R - RADIAL_GAP / 2, key: 0 },
+                { id: 'triple', inner: TRIPLE_INNER_R + RADIAL_GAP / 2, outer: TRIPLE_OUTER_R - RADIAL_GAP / 2, key: 1 },
+                { id: 'outer-single', inner: TRIPLE_OUTER_R + RADIAL_GAP / 2, outer: DOUBLE_INNER_R - RADIAL_GAP / 2, key: 2 },
+                { id: 'double', inner: DOUBLE_INNER_R + RADIAL_GAP / 2, outer: DOUBLE_OUTER_R, key: 3 }
+            ];
+
+            let lastPhaseKey = '';
+            let lastBoardTarget = null;
+
+            function hexToRgb(hex) {
+                const n = parseInt(hex.slice(1), 16);
+                return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+            }
+            function colorAlpha(hex, alpha) {
+                const { r, g, b } = hexToRgb(hex);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+            function polar(cx, cy, r, angleDeg) {
+                const rad = (angleDeg * Math.PI) / 180;
+                return {
+                    x: cx + (r * Math.sin(rad)),
+                    y: cy - (r * Math.cos(rad))
+                };
+            }
+            function segmentPath(cx, cy, innerR, outerR, startDeg, endDeg) {
+                const startOuter = polar(cx, cy, outerR, startDeg);
+                const endOuter = polar(cx, cy, outerR, endDeg);
+                const startInner = polar(cx, cy, innerR, endDeg);
+                const endInner = polar(cx, cy, innerR, startDeg);
+                const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+                return [
+                    `M ${startOuter.x} ${startOuter.y}`,
+                    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}`,
+                    `L ${startInner.x} ${startInner.y}`,
+                    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${endInner.x} ${endInner.y}`,
+                    'Z'
+                ].join(' ');
+            }
+            function wedgeAnglesForNumber(num) {
+                const idx = DARTBOARD_WHEEL.indexOf(num);
+                if (idx < 0) return null;
+                const slice = 360 / DARTBOARD_WHEEL.length;
+                const start = idx * slice - slice / 2;
+                const end = start + slice;
+                const mid = start + slice / 2;
+                return { start, end, mid, slice };
+            }
+
+            function renderAvatarHtml(avatar, name) {
+                if (avatar) return `<img src="${avatar}" alt="">`;
+                const initials = (name || '?').trim().slice(0, 2).toUpperCase();
+                return `<div class="initials">${initials}</div>`;
+            }
+
+            function buildRoundDots(currentRound) {
+                const host = document.getElementById('roundDots');
+                if (!host) return;
+                let html = '';
+                for (let i = 1; i <= MAX_ROUNDS; i++) {
+                    html += `<div class="round-dot ${i <= currentRound ? 'filled' : ''}"></div>`;
+                }
+                host.innerHTML = html;
+            }
+
+            function buildBoard(targetNumber) {
+                const svg = document.getElementById('dartboardSvg');
+                const labels = document.getElementById('boardLabels');
+                if (!svg || !labels) return;
+                svg.innerHTML = '';
+                labels.innerHTML = '';
+
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+                clip.setAttribute('id', 'boardClip');
+                const clipCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                clipCircle.setAttribute('cx', CX);
+                clipCircle.setAttribute('cy', CY);
+                clipCircle.setAttribute('r', OUTER_R);
+                clip.appendChild(clipCircle);
+                defs.appendChild(clip);
+                svg.appendChild(defs);
+
+                const boardGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                boardGroup.setAttribute('clip-path', 'url(#boardClip)');
+
+                const boardBase = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                boardBase.setAttribute('cx', CX);
+                boardBase.setAttribute('cy', CY);
+                boardBase.setAttribute('r', OUTER_R);
+                boardBase.setAttribute('class', 'board-base');
+                boardGroup.appendChild(boardBase);
+
+                const slice = 360 / DARTBOARD_WHEEL.length;
+
+                DARTBOARD_WHEEL.forEach((num, idx) => {
+                    const start = idx * slice - slice / 2;
+                    const end = start + slice;
+                    const isTarget = num === targetNumber;
+
+                    if (isTarget) {
+                        const underlay = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        underlay.setAttribute('d', segmentPath(CX, CY, BULL_R, DOUBLE_OUTER_R, start, end));
+                        /* REVERT wedge-contrast: fill 0.28, stroke 0.5 */
+                        underlay.setAttribute('fill', colorAlpha(TEAL, 0.42));
+                        underlay.setAttribute('stroke', colorAlpha(TEAL, 0.72));
+                        underlay.setAttribute('stroke-width', '1');
+                        boardGroup.appendChild(underlay);
+                    }
+
+                    BOARD_ZONES.forEach((zone, s) => {
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('d', segmentPath(CX, CY, zone.inner, zone.outer, start, end));
+                        const zoneClass = (zone.id === 'triple' || zone.id === 'double')
+                            ? ` zone-${zone.id}`
+                            : '';
+                        path.setAttribute('class', `board-sub-segment${zoneClass}${isTarget ? ' target-lit' : ''}`);
+                        /* REVERT wedge-contrast: isTarget ? 0.55 : 0.22 */
+                        const baseAlpha = isTarget ? 0.68 : 0.22;
+                        const ringBoost = (zone.id === 'triple' || zone.id === 'double') ? 0.14 : s * 0.06;
+                        path.setAttribute('fill', isTarget
+                            ? colorAlpha(TEAL, baseAlpha + ringBoost)
+                            : colorAlpha(MUTED, baseAlpha + (zone.id === 'triple' || zone.id === 'double' ? 0.08 : 0)));
+                        path.setAttribute('data-number', String(num));
+                        path.setAttribute('data-segment', String(zone.key));
+                        path.setAttribute('data-zone', zone.id);
+                        boardGroup.appendChild(path);
+                    });
+                });
+
+                const bull = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                bull.setAttribute('cx', CX);
+                bull.setAttribute('cy', CY);
+                bull.setAttribute('r', BULL_R);
+                bull.setAttribute('class', 'board-bull');
+                boardGroup.appendChild(bull);
+
+                svg.appendChild(boardGroup);
+
+                const angles = wedgeAnglesForNumber(targetNumber);
+                if (angles) {
+                    const labelR = OUTER_R + 14;
+                    const pos = polar(CX, CY, labelR, angles.mid);
+                    const el = document.createElement('div');
+                    el.className = 'target-number-label';
+                    el.textContent = String(targetNumber);
+                    el.style.left = `${(pos.x / 220) * 100}%`;
+                    el.style.top = `${(pos.y / 220) * 100}%`;
+                    labels.appendChild(el);
+                }
+            }
+
+            function renderScoreboard(gd) {
+                const pane = document.getElementById('scorePane');
+                if (!pane) return;
+                const players = gd.players || [];
+                const round = gd.currentRound || 1;
+                const thrown = gd.throwsThisTurn || 0;
+                pane.classList.toggle('is-doubles', !!gd.isDoublesLineup);
+
+                // Row height comes from .team-identity's content (avatar scale + its own
+                // padding-bottom), not a fixed value, so it can't be capped with a simple
+                // height var like Derby's --derby-row-height. Only at 6 players does the
+                // natural ~172px/row (2-5 players always fit) overflow the pane's real
+                // height, so shrink avatar scale + paddings only then -- tuned+verified via
+                // getBoundingClientRect() at 6 players, not derived from the CSS alone.
+                const isCramped = players.length >= 6;
+                if (isCramped) {
+                    // Note: transform:scale() on .fc-player-badge is paint-only -- it does
+                    // NOT shrink the badge's reserved layout box (fixed at ~138px), so only
+                    // row-pad-v and identity-pad-b actually reduce row height. At scale 0.76
+                    // the badge's visual size (~105px) leaves plenty of room inside that
+                    // 138px box for the name-plate's hang, so identity-pad-b can go to 0.
+                    pane.style.setProperty('--sh-row-pad-v', '6px');
+                    pane.style.setProperty('--sh-identity-pad-b', '0px');
+                    pane.style.setProperty('--sh-avatar-scale', '0.76');
+                } else {
+                    pane.style.removeProperty('--sh-row-pad-v');
+                    pane.style.removeProperty('--sh-identity-pad-b');
+                    pane.style.removeProperty('--sh-avatar-scale');
+                }
+
+                pane.innerHTML = players.map((p, idx) => {
+                    const isActive = idx === gd.activeIdx;
+                    const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+                    const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                    const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                        ? gd.throwerIndices[idx] : 0;
+                    const dots = [0, 1, 2].map(d =>
+                        `<div class="dot ${isActive && d < thrown ? 'thrown' : ''}"></div>`
+                    ).join('');
+
+                    let identity;
+                    if (isDuo && window.FC_renderDoublesDuo) {
+                        identity = FC_renderDoublesDuo(members, {
+                            isActive, throwerIdx, colorIndex: idx, dartsHtml: dots
+                        });
+                    } else {
+                        const badge = FC_renderPlayerBadge(p.avatar, p.name, { colorIndex: idx, orbit: isActive });
+                        identity = `${badge}<div class="dart-dots">${dots}</div>`;
+                    }
+
+                    const scores = Array.isArray(p.roundScores) ? p.roundScores : [];
+                    const cells = [];
+                    for (let r = 0; r < MAX_ROUNDS; r++) {
+                        const val = scores[r];
+                        const isCurrent = r === (round - 1) && isActive;
+                        if (val == null && !(isCurrent && thrown > 0)) {
+                            cells.push(`<div class="round-cell is-empty">-</div>`);
+                        } else {
+                            const shown = val == null ? 0 : val;
+                            cells.push(`<div class="round-cell ${isCurrent ? 'is-current' : ''}">${shown}</div>`);
+                        }
+                    }
+
+                    return `
+                        <div class="team-row color-${idx % 8} ${isActive ? 'active-turn' : ''}">
+                            <div class="team-identity${isDuo ? ' is-duo' : ''}">${identity}</div>
+                            <div class="round-cells">${cells.join('')}</div>
+                            <div class="total-score">${p.score || 0}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function clearWinFx() {
+                const fx = document.getElementById('shWinFx');
+                if (fx) fx.innerHTML = '';
+            }
+
+            function seedWinFx() {
+                const fx = document.getElementById('shWinFx');
+                if (!fx) return;
+                const petalColors = ['#f7ebcf', '#efe0b8', '#e8d090', '#2ec4b6', '#c5a059', '#ffb4a8'];
+                let html = '';
+                for (let i = 0; i < 28; i++) {
+                    const left = (Math.random() * 100).toFixed(1);
+                    const delay = (Math.random() * 3.2).toFixed(2);
+                    const dur = (3.6 + Math.random() * 3.2).toFixed(2);
+                    const w = (8 + Math.random() * 12).toFixed(1);
+                    const h = (6 + Math.random() * 8).toFixed(1);
+                    const drift = ((Math.random() * 120) - 40).toFixed(0);
+                    const c = petalColors[i % petalColors.length];
+                    html += `<span class="sh-petal" style="left:${left}%;top:-8%;--delay:${delay}s;--dur:${dur}s;--w:${w}px;--h:${h}px;--drift:${drift}px;--c:${c}"></span>`;
+                }
+                for (let i = 0; i < 10; i++) {
+                    const left = (6 + Math.random() * 88).toFixed(1);
+                    const delay = (Math.random() * 2.8).toFixed(2);
+                    const dur = (5 + Math.random() * 3.5).toFixed(2);
+                    const size = (12 + Math.random() * 16).toFixed(1);
+                    const drift = ((Math.random() * 80) - 40).toFixed(0);
+                    html += `<span class="sh-lantern" style="left:${left}%;bottom:-8%;--delay:${delay}s;--dur:${dur}s;--size:${size}px;--drift:${drift}px"></span>`;
+                }
+                fx.innerHTML = html;
+            }
+
+            function hideOverlay() {
+                const el = document.getElementById('shanghaiOverlay');
+                if (!el) return;
+                el.classList.remove('active', 'mode-winner', 'mode-next', 'mode-draw', 'mode-round', 'mode-final');
+                clearWinFx();
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(el);
+            }
+
+            function setSeal(mode) {
+                const el = document.getElementById('shSeal');
+                if (!el) return;
+                el.textContent = mode === 'winner' ? 'Win' : (mode === 'draw' ? 'Tie' : (mode === 'round' ? 'Aim' : 'Next'));
+            }
+
+            function showOverlay(mode, cfg) {
+                const el = document.getElementById('shanghaiOverlay');
+                const saddle = document.getElementById('shSaddle');
+                if (!el || !saddle) return;
+                el.classList.add('active', `mode-${mode}`);
+                setSeal(mode);
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.applyScreenClass(el);
+
+                document.getElementById('shEyebrow').textContent = cfg.eyebrow || '';
+                document.getElementById('shName').textContent = cfg.name || 'PLAYER';
+                document.getElementById('shQuip').textContent = cfg.quip || '';
+                const host = document.getElementById('shAvatarHost');
+
+                const isDraw = mode === 'draw' && Array.isArray(cfg.contenders) && cfg.contenders.length;
+                const isDuo = !isDraw && Array.isArray(cfg.members) && cfg.members.length > 1;
+                saddle.classList.toggle('duo-wrap', !!(isDuo || isDraw));
+
+                if (isDraw) {
+                    host.innerHTML = `<div class="sh-draw-row">${cfg.contenders.map(c => {
+                        const members = c.members && c.members.length ? c.members : [c];
+                        const avatars = members.length > 1
+                            ? `<div class="sh-duo">${members.map(m =>
+                                `<div class="sh-avatar">${renderAvatarHtml(m.avatar, m.name)}</div>`
+                            ).join('')}</div>`
+                            : `<div class="sh-avatar">${renderAvatarHtml(c.avatar, c.name)}</div>`;
+                        return `<div class="sh-draw-col">${avatars}<div class="sh-name">${c.name || 'PLAYER'}</div></div>`;
+                    }).join('')}</div>`;
+                    document.getElementById('shName').textContent = '';
+                } else if (isDuo) {
+                    host.innerHTML = `<div class="sh-duo">${cfg.members.map(m =>
+                        `<div class="sh-avatar">${renderAvatarHtml(m.avatar, m.name)}</div>`
+                    ).join('')}</div>`;
+                } else {
+                    host.innerHTML = `<div class="sh-avatar">${renderAvatarHtml(cfg.avatar, cfg.name)}</div>`;
+                }
+
+                const metaScore = document.getElementById('shMetaScore');
+                if (metaScore) metaScore.textContent = cfg.score != null ? String(cfg.score) : '0';
+
+                const targetNum = document.getElementById('shTargetNum');
+                const tagsEl = document.getElementById('shTags');
+                if (mode === 'round') {
+                    el.classList.toggle('mode-final', !!cfg.isLast);
+                    if (targetNum) {
+                        targetNum.textContent = String(cfg.target != null ? cfg.target : (cfg.round || 1));
+                        targetNum.setAttribute('aria-hidden', 'false');
+                    }
+                    if (tagsEl) {
+                        const tagList = Array.isArray(cfg.tags) ? cfg.tags : [];
+                        tagsEl.innerHTML = tagList.map(t => {
+                            const hot = /FINAL/i.test(t) ? ' hot' : '';
+                            return '<span class="sh-tag' + hot + '">' + t + '</span>';
+                        }).join('');
+                    }
+                } else {
+                    el.classList.remove('mode-final');
+                    if (targetNum) {
+                        targetNum.textContent = '';
+                        targetNum.setAttribute('aria-hidden', 'true');
+                    }
+                    if (tagsEl) tagsEl.innerHTML = '';
+                }
+
+                if (mode === 'winner') {
+                    seedWinFx();
+                    if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.playIn(el);
+                }
+            }
+
+            function renderPhaseOverlays(gd) {
+                document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+
+                const phase = gd.phase || { type: 'playing' };
+                const phaseKey = `${phase.type}-${phase.startedAt}`;
+                if (phaseKey === lastPhaseKey) return;
+                lastPhaseKey = phaseKey;
+
+                hideOverlay();
+
+                if (phase.type === 'round_announce') {
+                    const d = phase.data || {};
+                    const r = d.round || 1;
+                    showOverlay('round', {
+                        eyebrow: d.eyebrow || 'SCROLL ROUND',
+                        quip: d.subtitle || ('Aim for ' + r),
+                        round: r,
+                        target: r,
+                        tags: d.tags || [],
+                        isLast: !!d.isLast
+                    });
+                    return;
+                }
+
+                if (phase.type === 'intermission') {
+                    showOverlay('next', {
+                        eyebrow: 'Up Next',
+                        name: phase.data.nextPlayerName || 'PLAYER',
+                        avatar: phase.data.avatar,
+                        quip: phase.data.targetNumber
+                            ? `Aim for ${phase.data.targetNumber}`
+                            : 'Your Throw'
+                    });
+                    return;
+                }
+
+                if (phase.type === 'winner') {
+                    const d = phase.data || {};
+                    showOverlay('winner', {
+                        eyebrow: 'Shanghai Champion',
+                        name: d.winnerName || 'PLAYER',
+                        avatar: d.avatar,
+                        members: d.members,
+                        quip: 'Highest Score',
+                        score: d.score != null ? d.score : 0
+                    });
+                    return;
+                }
+
+                if (phase.type === 'draw') {
+                    const d = phase.data || {};
+                    showOverlay('draw', {
+                        eyebrow: 'Dead Heat',
+                        name: 'Draw',
+                        contenders: d.contenders || [],
+                        quip: 'Tied on points'
+                    });
+                }
+            }
+
+            function applyGameData(gd) {
+                if (!gd || gd.gameType !== 'shanghai') return;
+                const target = Math.min(Math.max(gd.currentRound || 1, 1), MAX_ROUNDS);
+                buildRoundDots(target);
+                if (lastBoardTarget !== target) {
+                    buildBoard(target);
+                    lastBoardTarget = target;
+                }
+                renderScoreboard(gd);
+                renderPhaseOverlays(gd);
+            }
+
+            window.addEventListener('message', (event) => {
+                const msg = event.data;
+                if (!msg || msg.type !== 'SYNC_STATE' || !msg.state) return;
+                const state = msg.state;
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.applyFromState(state);
+                    FlightDeckWinnerVideo.applyScreenClass(document.getElementById('shanghaiOverlay'));
+                }
+                applyGameData(state.gameData);
+            });
+
+            if (window.FC_syncWindowTitleBackground) FC_syncWindowTitleBackground();
+            buildRoundDots(1);
+            buildBoard(1);
+        });
+    </script>
+</body>
+</html>

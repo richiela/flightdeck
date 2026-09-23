@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/cricket-mark-draw.css">
+    <script src="/games/cricket-mark-draw.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>Cricket</title>
+    <style>
+        :root {
+            --pitch: #1a4d3a;
+            --pitch-deep: #0f2f24;
+            --pitch-mid: #246b52;
+            --cream: #f3ecd8;
+            --gold: #e2c56a;
+            --ink: #111;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 30%, var(--pitch-mid) 0%, var(--pitch) 45%, var(--pitch-deep) 100%);
+            background: var(--page-bg);
+            color: #fff;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid var(--gold);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted var(--gold);
+            border-radius: 8px;
+        }
+        .window-game-title {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: var(--gold);
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid var(--gold);
+            border-right: 4px solid var(--gold);
+        }
+
+        .round-badge {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            z-index: 95;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(8, 28, 22, 0.9);
+            border: 3px solid #111;
+            border-radius: 6px;
+            box-shadow: 0 0 0 2px var(--gold);
+            pointer-events: none;
+        }
+        .round-badge .lbl {
+            font-size: 0.7rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            line-height: 1;
+        }
+        .round-badge .num {
+            font-size: 1.05rem;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1;
+            min-width: 1.1em;
+            text-align: center;
+        }
+
+        .arena {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 55px 40px 50px;
+            box-sizing: border-box;
+            gap: 18px;
+        }
+
+        .scoreboard-stack {
+            --sb-num-col: 88px;
+            /* Default (singles); renderBoard() overrides to --sb-player-col-doubles per match.
+               Doubles pair avatar clusters measure 244px wide at the current --fc-avatar-inplay
+               (120px) — a single avatar is 120px. Each gets real margin on both sides. */
+            --sb-player-col: 170px;
+            --sb-player-col-doubles: 270px;
+            --sb-left: 1;
+            --sb-right: 1;
+            --sb-grid-cols: repeat(var(--sb-left), var(--sb-player-col)) var(--sb-num-col) repeat(var(--sb-right), var(--sb-player-col));
+            /* Shift so the NUM column stays on the arena centerline when sides are uneven */
+            --sb-balance: calc((var(--sb-right) - var(--sb-left)) * var(--sb-player-col) / 2);
+            width: calc(var(--sb-num-col) + ((var(--sb-left) + var(--sb-right)) * var(--sb-player-col)));
+            max-width: 94vw;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transform: translateX(var(--sb-balance));
+        }
+        .sb-roster,
+        .sb-header,
+        .sb-row {
+            display: grid;
+            grid-template-columns: var(--sb-grid-cols);
+            align-items: stretch;
+        }
+        .sb-roster {
+            align-items: end;
+            overflow: visible;
+        }
+        .sb-roster-mid {
+            min-height: 1px;
+        }
+        .scoreboard {
+            width: 100%;
+            background: rgba(8, 28, 22, 0.72);
+            border: 4px solid #111;
+            border-radius: 14px;
+            box-shadow: 0 0 0 3px var(--gold), 0 18px 40px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+
+        .sb-header {
+            background: rgba(0,0,0,0.35);
+            border-bottom: 3px solid #111;
+            border-radius: 10px 10px 0 0;
+        }
+        .sb-corner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--gold);
+            font-size: 0.85rem;
+            border-left: 2px solid rgba(255,255,255,0.12);
+            border-right: 2px solid rgba(255,255,255,0.12);
+            padding: 12px 8px;
+            background: rgba(0,0,0,0.25);
+        }
+        .sb-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 10px 4px;
+            position: relative;
+            overflow: visible;
+        }
+        .sb-player.active-turn {
+            /* glow lives on avatar via shared theme */
+        }
+        .sb-points-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 8px;
+            border-right: 2px solid rgba(255,255,255,0.08);
+            font-size: 1.45rem;
+            font-weight: 900;
+            color: var(--gold);
+            letter-spacing: 1px;
+            min-height: 52px;
+        }
+        .sb-points-cell.active-turn {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            text-shadow: 0 0 12px rgba(226, 197, 106, 0.45);
+        }
+        .sb-player-top {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: calc(var(--fc-avatar-inplay) + 18px);
+            height: calc(var(--fc-avatar-inplay) + 18px);
+        }
+        .sb-player-top.is-duo {
+            width: auto;
+            min-width: calc(var(--fc-avatar-inplay) + 18px);
+        }
+        /* Doubles: keep avatar stack in flow; park darts absolute so gap doesn't shift faces */
+        .sb-player-top.is-duo .fc-duo-row {
+            --fc-duo-pull: 14px; /* higher = closer avatars */
+            --fc-duo-dart-gap: -4px; /* ← dart counter distance (lower = closer to pair) */
+            position: relative;
+            justify-content: flex-start;
+            width: max-content;
+        }
+        .sb-player-top.is-duo .fc-duo-darts {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: var(--fc-duo-dart-gap);
+            opacity: 0;
+            transition: opacity 0.2s ease, margin-left 0.15s;
+            pointer-events: none;
+        }
+        .sb-player.active-turn .sb-player-top.is-duo .fc-duo-darts { opacity: 1; }
+        /* duo .dot size/idle/thrown from shared-player-theme.css FC_DART_COUNTER */
+        .ck-saddle.duo-wrap {
+            width: auto; height: auto;
+            display: flex; gap: 12px; background: transparent; border: none;
+            box-shadow: none;
+        }
+        .ck-saddle.duo-wrap .ck-saddle-item {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; overflow: hidden; border: 4px solid #e2c56a;
+            background: #1a1510;
+        }
+        .dart-dots {
+            position: absolute;
+            left: calc(50% + (var(--fc-avatar-inplay) / 2) + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .sb-player.active-turn .dart-dots { opacity: 1; }
+        .dart-dots .dot {
+            transition: all 0.2s ease;
+        }
+
+        .throw-strip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 48px;
+            padding: 8px 16px;
+            background: rgba(8, 28, 22, 0.72);
+            border: 3px solid #111;
+            border-radius: 12px;
+            box-shadow: 0 0 0 2px var(--gold);
+            z-index: 5;
+        }
+        .throw-strip-label {
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-right: 4px;
+        }
+        .throw-chip {
+            min-width: 72px;
+            height: 36px;
+            padding: 0 12px;
+            border-radius: 8px;
+            border: 2px solid rgba(255,255,255,0.25);
+            background: rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 900;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 1px;
+        }
+        .throw-chip.filled {
+            color: #fff;
+            border-color: #111;
+            background: rgba(255,255,255,0.12);
+            box-shadow: inset 0 0 0 2px rgba(226, 197, 106, 0.35);
+        }
+        .throw-chip .mult {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            border-radius: 4px;
+            background: var(--gold);
+            color: #111;
+            font-size: 0.75rem;
+            font-weight: 900;
+        }
+        .throw-chip .mult.d { background: #7AD7F0; }
+        .throw-chip .mult.t { background: #ff8a80; }
+        .throw-chip .val {
+            font-size: 1rem;
+        }
+        .throw-chip.miss .val {
+            color: rgba(255,255,255,0.55);
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+        }
+        .sb-points {
+            display: none; /* scores live in the POINTS header row inside the box */
+        }
+
+        .sb-row {
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            min-height: 58px;
+        }
+        .sb-row:nth-child(even) { background: rgba(255,255,255,0.03); }
+        .sb-row.closed-row { opacity: 0.45; }
+        .sb-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.55rem;
+            font-weight: 900;
+            color: var(--cream);
+            border-left: 2px solid rgba(255,255,255,0.12);
+            border-right: 2px solid rgba(255,255,255,0.12);
+            background: rgba(0,0,0,0.2);
+        }
+        .sb-num.bull { color: var(--gold); letter-spacing: 1px; font-size: 1.15rem; }
+        .sb-marks {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 2px solid rgba(255,255,255,0.06);
+            font-size: 1.8rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: #fff;
+            text-shadow: 0 2px 0 #111;
+        }
+        .sb-marks.open { color: var(--gold); }
+        .sb-marks.dead { color: rgba(255,255,255,0.25); }
+        .mark-icon {
+            display: block;
+            width: 1.35em;
+            height: 1.35em;
+            overflow: visible;
+        }
+        .mark-icon circle,
+        .mark-icon line {
+            fill: none;
+            stroke: currentColor;
+            stroke-linecap: round;
+        }
+        .mark-icon circle { stroke-width: 2.4; }
+        .mark-icon line { stroke-width: 2.6; }
+
+        /* --- Overlays (velvet + brass) --- */
+        .cricket-takeover {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            z-index: 500;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .cricket-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            animation: overlayFadeIn 0.22s ease forwards;
+        }
+        .cricket-takeover.mode-next.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(40, 90, 110, 0.35), transparent 55%),
+                rgba(6, 18, 24, 0.92);
+        }
+        .cricket-takeover.mode-score.active {
+            background:
+                radial-gradient(ellipse at 50% 35%, rgba(40, 120, 70, 0.4), transparent 55%),
+                rgba(4, 22, 14, 0.94);
+            animation: overlayFadeIn 0.22s ease forwards, ckScorePulse 1.8s ease-in-out 0.2s infinite;
+        }
+        .cricket-takeover.mode-open.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(120, 95, 20, 0.35), transparent 55%),
+                rgba(14, 12, 6, 0.94);
+        }
+        .cricket-takeover.mode-close.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(120, 25, 30, 0.4), transparent 55%),
+                rgba(16, 6, 8, 0.95);
+        }
+        .cricket-takeover.mode-winner.active {
+            background:
+                radial-gradient(ellipse at 50% 25%, rgba(90, 70, 20, 0.45), transparent 50%),
+                rgba(4, 12, 10, 0.96);
+            z-index: 600;
+        }
+
+        .ck-flash {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            opacity: 0; background: rgba(255,255,255,0.18);
+        }
+        .mode-open.active .ck-flash {
+            animation: ckBoardFlash 0.55s ease-out 0.05s forwards;
+        }
+        .mode-close.active .ck-flash {
+            animation: ckBoardFlash 0.45s ease-out 0.08s forwards;
+            background: rgba(255, 60, 60, 0.16);
+        }
+
+        .ck-tick-field {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+        }
+        .ck-tick {
+            position: absolute;
+            width: 3px; height: 18px;
+            background: var(--gold);
+            opacity: 0;
+            border-radius: 1px;
+            box-shadow: 0 0 8px rgba(226,197,106,0.6);
+        }
+        .mode-score.active .ck-tick {
+            animation: ckTickStreak var(--dur, 0.9s) ease-out var(--delay, 0s) both;
+        }
+
+        .ck-pennant {
+            position: absolute; top: 0; left: 0; right: 0; height: 48px;
+            display: flex; align-items: stretch; z-index: 2;
+            transform: translateY(-100%); opacity: 0;
+        }
+        .cricket-takeover.active .ck-pennant {
+            animation: ckPennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        .ck-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #c4a35a;
+            border-bottom: 3px solid rgba(226,197,106,0.85);
+        }
+        .mode-score .ck-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #7CFFB2; }
+        .mode-open .ck-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #e2c56a; }
+        .mode-close .ck-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #ff5252; }
+        .mode-next .ck-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #7AD7F0; }
+
+        .ck-pennant-banner {
+            flex: 0 0 auto; min-width: 280px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 28px; background: #1a1510; border-bottom: 3px solid var(--gold);
+            color: var(--gold); font-size: 1.05rem; font-weight: 900; letter-spacing: 4px;
+            text-transform: uppercase; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+        }
+        .mode-score .ck-pennant-banner { background: #0d2a1a; color: #7CFFB2; border-bottom-color: #7CFFB2; }
+        .mode-open .ck-pennant-banner { background: #1a1510; color: #e2c56a; }
+        .mode-close .ck-pennant-banner { background: #111; color: #ff8a80; border-bottom-color: #ff5252; }
+        .mode-next .ck-pennant-banner { background: #0c2430; color: #7AD7F0; border-bottom-color: #7AD7F0; }
+        .mode-winner .ck-pennant-banner { background: #1a1510; color: #e2c56a; }
+
+        .ck-stage {
+            position: relative; z-index: 3;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            width: min(660px, 94vw);
+        }
+        .mode-next .ck-stage {
+            animation: ckSlideFromOche 0.5s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+        }
+
+        .ck-mark-draw {
+            width: 72px; height: 72px;
+            opacity: 0;
+            color: #e2c56a;
+            filter: drop-shadow(0 4px 0 #111);
+        }
+        .mode-open.active .ck-mark-draw {
+            animation: ckReveal 0.3s ease 0.28s forwards;
+        }
+        .mode-close .ck-mark-draw { color: #ff8a80; }
+        .mode-close.active .ck-mark-draw {
+            animation: ckGateStamp 0.45s cubic-bezier(0.15, 0.9, 0.3, 1.1) 0.22s forwards;
+        }
+        .ck-mark-draw svg { width: 100%; height: 100%; }
+        .ck-mark-draw.hidden { display: none; }
+
+        .ck-callboard {
+            font-size: 0.95rem; font-weight: 900; letter-spacing: 5px;
+            text-transform: uppercase; color: #c4a35a;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+            opacity: 0; transform: translateY(12px);
+        }
+        .mode-score .ck-callboard { color: #7CFFB2; }
+        .mode-open .ck-callboard { color: #e2c56a; font-size: 1.2rem; letter-spacing: 6px; }
+        .mode-close .ck-callboard { color: #ff8a80; font-size: 1.2rem; letter-spacing: 6px; }
+        .mode-next .ck-callboard { color: #7AD7F0; }
+        .mode-winner .ck-callboard { color: #e2c56a; }
+        .cricket-takeover.active .ck-callboard {
+            animation: ckReveal 0.35s ease 0.05s forwards;
+        }
+
+        .ck-badge {
+            width: 100%;
+            font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 900;
+            letter-spacing: 4px; text-transform: uppercase; color: #fff;
+            line-height: 0.95; text-align: center;
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(196, 163, 90, 0.35);
+            opacity: 0; transform: scale(2.2); filter: blur(8px);
+        }
+        .mode-score .ck-badge {
+            font-size: clamp(4.5rem, 16vw, 8rem);
+            letter-spacing: 2px;
+            line-height: 0.9;
+            text-shadow: 0 6px 0 #111, 0 0 40px rgba(124, 255, 178, 0.45);
+        }
+        .mode-open .ck-badge,
+        .mode-close .ck-badge {
+            font-size: clamp(5.5rem, 20vw, 10rem);
+            letter-spacing: 2px;
+            line-height: 0.88;
+            margin: 4px 0 2px;
+        }
+        .mode-open .ck-badge { text-shadow: 0 6px 0 #111, 0 0 40px rgba(226, 197, 106, 0.5); }
+        .mode-close .ck-badge {
+            text-shadow: 0 6px 0 #111, 0 0 40px rgba(255, 82, 82, 0.55);
+            animation: ckSlam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.06s forwards,
+                       ckGateShake 0.35s ease-out 0.42s both !important;
+        }
+        .mode-winner .ck-badge {
+            font-size: clamp(2.8rem, 8vw, 4.6rem);
+            text-shadow: 0 4px 0 #111, 0 0 36px rgba(226, 197, 106, 0.5);
+        }
+        .mode-next .ck-badge { display: none; }
+        .cricket-takeover.active:not(.mode-close) .ck-badge {
+            animation: ckSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.08s forwards;
+        }
+
+        .ck-delta { display: none !important; }
+
+        .ck-saddle {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 20px);
+            height: calc(var(--fc-avatar-overlay) + 20px);
+            border-radius: 50%; background: #fff; border: 5px solid #111;
+            box-shadow: 0 0 0 6px #c4a35a, 0 12px 28px rgba(0,0,0,0.45);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transform: scale(2.2); filter: blur(8px);
+        }
+        .ck-saddle.duo-wrap {
+            width: auto; height: auto;
+            border-radius: 0; background: transparent; border: none;
+            box-shadow: none; gap: 12px; filter: none;
+        }
+        .ck-saddle.duo-wrap .ck-avatar {
+            display: flex; gap: 12px; width: auto; height: auto;
+            border: none; background: transparent;
+        }
+        .mode-score .ck-saddle { box-shadow: 0 0 0 6px #7CFFB2, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-open .ck-saddle { box-shadow: 0 0 0 6px #e2c56a, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-close .ck-saddle { box-shadow: 0 0 0 6px #ff5252, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-next .ck-saddle { box-shadow: 0 0 0 6px #7AD7F0, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-winner .ck-saddle {
+            box-shadow: 0 0 0 7px #e2c56a, 0 0 0 12px rgba(226,197,106,0.25), 0 14px 32px rgba(0,0,0,0.5);
+        }
+        .cricket-takeover.active .ck-saddle {
+            animation: ckSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .mode-winner.active .ck-saddle {
+            animation: ckMedalSpin 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) 0.1s forwards;
+        }
+        .ck-avatar {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; border: 4px solid #111; background: #111; overflow: hidden;
+        }
+        .ck-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .ck-avatar .initials {
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+            font-size: 2.6rem; font-weight: 900; color: #fff; background: #1bc4cf;
+        }
+        .ck-name {
+            margin: 0; font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 900;
+            letter-spacing: 2px; text-transform: uppercase; color: #fff;
+            text-shadow: 0 3px 0 #111; text-align: center;
+            opacity: 0; transform: translateY(16px);
+        }
+        .cricket-takeover.active .ck-name {
+            animation: ckReveal 0.35s ease 0.18s forwards;
+        }
+        .ck-quip {
+            font-size: 1.15rem; font-weight: 900; letter-spacing: 3px;
+            text-transform: uppercase; color: #c4a35a;
+            opacity: 0; transform: translateY(16px);
+        }
+        .mode-score .ck-quip { color: #7CFFB2; }
+        .mode-open .ck-quip { color: #e2c56a; }
+        .mode-close .ck-quip { color: #ff8a80; }
+        .mode-next .ck-quip { color: #7AD7F0; }
+        .mode-winner .ck-quip { color: #e2c56a; }
+        .cricket-takeover.active .ck-quip {
+            animation: ckReveal 0.35s ease 0.22s forwards;
+        }
+        .ck-meta {
+            display: none;
+            gap: 10px;
+            margin-top: 2px;
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        .mode-winner .ck-meta { display: flex; }
+        .mode-winner.active .ck-meta {
+            animation: ckReveal 0.35s ease 0.28s forwards;
+        }
+        .ck-meta-chip {
+            padding: 8px 14px;
+            border: 2px solid #111;
+            border-radius: 6px;
+            background: rgba(226,197,106,0.12);
+            box-shadow: inset 0 0 0 1px rgba(226,197,106,0.45);
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .ck-meta-chip span { color: #e2c56a; }
+
+        .ck-next-dart {
+            display: none;
+            width: 28px; height: 8px;
+            margin-top: 4px;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #7AD7F0, #fff);
+            box-shadow: 0 0 10px rgba(122,215,240,0.5);
+            opacity: 0;
+        }
+        .mode-next .ck-next-dart { display: block; }
+        .mode-next.active .ck-next-dart {
+            animation: ckDartTick 0.55s cubic-bezier(0.2, 0.85, 0.2, 1) 0.28s forwards;
+        }
+
+        .ck-stripe {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
+            background: repeating-linear-gradient(90deg, #c4a35a 0 16px, #111 16px 32px);
+            opacity: 0; transform: translateY(100%); z-index: 2;
+        }
+        .mode-score .ck-stripe { background: repeating-linear-gradient(90deg, #7CFFB2 0 16px, #111 16px 32px); }
+        .mode-open .ck-stripe { background: repeating-linear-gradient(90deg, #e2c56a 0 16px, #111 16px 32px); }
+        .mode-close .ck-stripe { background: repeating-linear-gradient(90deg, #ff5252 0 16px, #111 16px 32px); }
+        .mode-next .ck-stripe { background: repeating-linear-gradient(90deg, #7AD7F0 0 16px, #111 16px 32px); }
+        .mode-winner .ck-stripe { background: repeating-linear-gradient(90deg, #e2c56a 0 16px, #111 16px 32px); }
+        .cricket-takeover.active .ck-stripe {
+            animation: ckStripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+
+        /* Winner FX: flights + mark rain */
+        .ck-win-fx {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden;
+            display: none;
+        }
+        .mode-winner .ck-win-fx { display: block; }
+        .ck-flight {
+            position: absolute;
+            width: 18px; height: 28px;
+            opacity: 0;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35));
+        }
+        .mode-winner.active .ck-flight {
+            animation: ckFlightDrift var(--dur, 5s) linear var(--delay, 0s) infinite;
+        }
+        .ck-flight svg { width: 100%; height: 100%; }
+        .ck-mark-rain {
+            position: absolute;
+            width: 22px; height: 22px;
+            color: #e2c56a;
+            opacity: 0;
+        }
+        .mode-winner.active .ck-mark-rain {
+            animation: ckMarkRain var(--dur, 2.4s) ease-in var(--delay, 0s) infinite;
+        }
+        .ck-mark-rain svg { width: 100%; height: 100%; }
+
+        @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes ckPennantDrop {
+            0% { transform: translateY(-100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes ckStripeUp {
+            0% { transform: translateY(100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes ckSlam {
+            0% { transform: scale(2.4); filter: blur(8px); opacity: 0; }
+            100% { transform: scale(1); filter: blur(0); opacity: 1; }
+        }
+        @keyframes ckReveal {
+            0% { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes ckBoardFlash {
+            0% { opacity: 0; }
+            30% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes ckGateStamp {
+            0% { opacity: 0; transform: scale(2.6) rotate(-18deg); filter: blur(6px); }
+            70% { opacity: 1; transform: scale(0.92) rotate(2deg); filter: blur(0); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes ckGateShake {
+            0%, 100% { transform: translate(0,0) scale(1); }
+            25% { transform: translate(-4px, 1px) scale(1.01); }
+            50% { transform: translate(4px, -1px) scale(1.01); }
+            75% { transform: translate(-2px, 0) scale(1); }
+        }
+        @keyframes ckTickStreak {
+            0% { opacity: 0; transform: translate(-40px, 20px) rotate(-25deg); }
+            20% { opacity: 0.9; }
+            100% { opacity: 0; transform: translate(90px, -70px) rotate(-25deg); }
+        }
+        @keyframes ckScorePulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.06); }
+        }
+        @keyframes ckSlideFromOche {
+            0% { opacity: 0; transform: translateX(48px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes ckDartTick {
+            0% { opacity: 0; transform: translateX(-24px) scaleX(0.4); }
+            100% { opacity: 1; transform: translateX(0) scaleX(1); }
+        }
+        @keyframes ckMedalSpin {
+            0% { opacity: 0; transform: scale(0.6) rotate(-180deg); filter: blur(8px); }
+            70% { opacity: 1; transform: scale(1.06) rotate(12deg); filter: blur(0); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+        }
+        @keyframes ckFlightDrift {
+            0% { opacity: 0; transform: translateY(40px) rotate(var(--rot, -12deg)); }
+            12% { opacity: 0.85; }
+            100% { opacity: 0; transform: translateY(-110vh) rotate(calc(var(--rot, -12deg) + 18deg)); }
+        }
+        @keyframes ckMarkRain {
+            0% { opacity: 0; transform: translateY(-30px) rotate(0deg) scale(0.6); }
+            12% { opacity: 0.95; }
+            100% { opacity: 0; transform: translateY(110vh) rotate(220deg) scale(1); }
+        }
+
+    
+        /* --- HELP OVERLAY --- */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(12, 35, 28, 0.95);
+            border: 2px solid #e2c56a;
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: #e2c56a; margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 0.95rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Round announce — chalk pavilion board */
+        .cricket-takeover.mode-round.active {
+            background: radial-gradient(ellipse at 50% 40%, #1a3a28 0%, #0a1610 70%);
+        }
+        .cricket-takeover.mode-round .ck-saddle,
+        .cricket-takeover.mode-round .ck-name,
+        .cricket-takeover.mode-round .ck-meta,
+        .cricket-takeover.mode-round .ck-mark-draw,
+        .cricket-takeover.mode-round .ck-delta,
+        .cricket-takeover.mode-round .ck-next-dart {
+            display: none !important;
+        }
+        .cricket-takeover.mode-round .ck-stage {
+            background:
+                linear-gradient(180deg, rgba(34, 78, 52, 0.95), rgba(22, 52, 36, 0.98));
+            border: 6px solid #5c4030;
+            border-radius: 6px;
+            box-shadow:
+                inset 0 0 40px rgba(0,0,0,0.35),
+                0 18px 50px rgba(0,0,0,0.45);
+            padding: 36px 48px 32px;
+            position: relative;
+        }
+        .cricket-takeover.mode-round .ck-stage::before {
+            content: '';
+            position: absolute; inset: 10px;
+            border: 1px dashed rgba(226, 197, 106, 0.25);
+            pointer-events: none;
+        }
+        .cricket-takeover.mode-round .ck-callboard {
+            color: #e2c56a !important;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+        }
+        .cricket-takeover.mode-round .ck-badge {
+            display: block !important;
+            font-size: clamp(3.4rem, 8vw, 5.6rem);
+            color: #f4f0e0 !important;
+            text-shadow: 2px 3px 0 rgba(0,0,0,0.35);
+            letter-spacing: 4px;
+            margin: 10px 0 8px;
+            animation: ckChalkIn 0.55s cubic-bezier(0.2, 0.95, 0.3, 1) 0.12s both;
+        }
+        @keyframes ckChalkIn {
+            from { opacity: 0; letter-spacing: 18px; filter: blur(3px); }
+            to { opacity: 1; letter-spacing: 4px; filter: blur(0); }
+        }
+        .cricket-takeover.mode-round .ck-quip {
+            color: rgba(244, 240, 224, 0.75) !important;
+            font-size: 1.05rem;
+            letter-spacing: 2px;
+        }
+        .cricket-takeover.mode-round .ck-chalk-dust {
+            display: block;
+            position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+        }
+        .cricket-takeover:not(.mode-round) .ck-chalk-dust { display: none; }
+        .ck-dust {
+            position: absolute; width: 4px; height: 4px; border-radius: 50%;
+            background: rgba(244,240,224,0.55);
+            animation: ckDust 1.4s ease-out forwards;
+        }
+        @keyframes ckDust {
+            to { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">Cricket</div>
+    </div>
+    <div class="round-badge" id="roundBadge" aria-label="Round">
+        <span class="lbl">Round</span>
+        <span class="num" id="roundNumber">1</span>
+    </div>
+
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Cricket Rules</h3>
+        <p>• Targets are 20, 19, 18, 17, 16, 15, and Bull. Max 4 players.</p>
+        <p>• Mark each number three times to close it (singles 1, doubles 2, triples 3).</p>
+        <p>• After you close a number, extra hits score points if any opponent still has it open.</p>
+        <p>• When everyone has closed a number, it is dead — no more points there.</p>
+        <p>• Close all numbers and lead on points to win.</p>
+    </div>
+
+    <div class="arena">
+        <div class="scoreboard-stack" id="scoreboardStack">
+            <div class="sb-roster" id="sbRoster"></div>
+            <div class="scoreboard" id="scoreboard"></div>
+        </div>
+        <div class="throw-strip" id="throwStrip" aria-label="This turn's darts"></div>
+    </div>
+
+    <div class="cricket-takeover" id="cricketOverlay" style="--fd-winner-video-border: #e2c56a;">
+        <div class="ck-flash" aria-hidden="true"></div>
+        <div class="ck-tick-field" id="ckTickField" aria-hidden="true"></div>
+        <div class="ck-win-fx" id="ckWinFx" aria-hidden="true"></div>
+
+        <div class="ck-pennant">
+            <div class="ck-pennant-check"></div>
+            <div class="ck-pennant-banner" id="ckPennant">Call</div>
+            <div class="ck-pennant-check"></div>
+        </div>
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="ck-stage">
+                    <div class="ck-chalk-dust" id="ckChalkDust" aria-hidden="true"></div>
+                    <div class="ck-callboard" id="ckCallboard">Event</div>
+                    <div class="ck-badge" id="ckBadge">MARK</div>
+                    <div class="ck-mark-draw hidden" id="ckMarkDraw" aria-hidden="true"></div>
+                    <div class="ck-delta hidden" id="ckDelta">+20</div>
+                    <div class="ck-saddle">
+                        <div class="ck-avatar" id="ckAvatar"></div>
+                    </div>
+                    <h1 class="ck-name" id="ckName">PLAYER</h1>
+                    <div class="ck-quip" id="ckQuip">Nice!</div>
+                    <div class="ck-meta" id="ckMeta">
+                        <div class="ck-meta-chip"><span id="ckMetaScore">0</span> pts</div>
+                        <div class="ck-meta-chip">Round <span id="ckMetaRounds">1</span></div>
+                    </div>
+                    <div class="ck-next-dart" aria-hidden="true"></div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+        <div class="ck-stripe"></div>
+    </div>
+
+    <script>
+        const CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 'bull'];
+        let lastPhaseKey = '';
+
+        function renderAvatarHtml(avatar, name) {
+            if (avatar) return `<img src="${avatar}" alt="">`;
+            const initials = (name || '?').trim().slice(0, 2).toUpperCase();
+            return `<div class="initials">${initials}</div>`;
+        }
+
+        function markSvg(inner) {
+            return `<svg class="mark-icon" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+        }
+
+        function markGlyph(count) {
+            // X arms extend past the close-circle so tips stay outside when closed
+            if (count >= 3) {
+                return markSvg(`
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="3.2" y1="3.2" x2="20.8" y2="20.8"/>
+                    <line x1="20.8" y1="3.2" x2="3.2" y2="20.8"/>
+                `);
+            }
+            if (count === 2) {
+                return markSvg(`
+                    <line x1="3.2" y1="3.2" x2="20.8" y2="20.8"/>
+                    <line x1="20.8" y1="3.2" x2="3.2" y2="20.8"/>
+                `);
+            }
+            if (count === 1) {
+                return markSvg(`
+                    <line x1="3.2" y1="3.2" x2="20.8" y2="20.8"/>
+                `);
+            }
+            return '';
+        }
+
+        function targetLabel(t) {
+            return t === 'bull' ? 'BULL' : String(t);
+        }
+
+        function renderThrowStrip(gd) {
+            const strip = document.getElementById('throwStrip');
+            if (!strip) return;
+            const darts = Array.isArray(gd.turnDarts) ? gd.turnDarts : [];
+            let html = '<div class="throw-strip-label">Darts</div>';
+            for (let i = 0; i < 3; i++) {
+                const dart = darts[i];
+                if (!dart) {
+                    html += '<div class="throw-chip"></div>';
+                    continue;
+                }
+                if (!dart.mult) {
+                    html += `<div class="throw-chip filled miss"><span class="val">${dart.label || 'MISS'}</span></div>`;
+                } else {
+                    const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+                    html += `<div class="throw-chip filled">
+                        <span class="mult ${mClass}">${dart.mult}</span>
+                        <span class="val">${dart.label}</span>
+                    </div>`;
+                }
+            }
+            strip.innerHTML = html;
+        }
+
+        function renderRound(gd) {
+            const el = document.getElementById('roundNumber');
+            if (el) el.textContent = String(gd.currentRound || 1);
+        }
+
+        /**
+         * Players flow around a fixed center NUM column (only real seats — no empty cols).
+         * 1: [P1] | NUM
+         * 2: [P1] | NUM | [P2]          ← both against the middle
+         * 3: [P1][P2] | NUM | [P3]
+         * 4: [P1][P2] | NUM | [P3][P4]
+         */
+        function cricketSeatSides(players) {
+            const list = players || [];
+            const n = list.length;
+            const left = [];
+            const right = [];
+            if (n >= 1) left.push({ player: list[0], idx: 0 });
+            if (n === 2) {
+                right.push({ player: list[1], idx: 1 });
+            } else if (n >= 2) {
+                left.push({ player: list[1], idx: 1 });
+            }
+            if (n >= 3) right.push({ player: list[2], idx: 2 });
+            if (n >= 4) right.push({ player: list[3], idx: 3 });
+            return { left, right };
+        }
+
+        function renderSeatPlayerHtml(seat, gd, thrown) {
+            const p = seat.player;
+            const idx = seat.idx;
+            const color = (window.FC_PLAYER_COLORS && FC_PLAYER_COLORS[idx % FC_PLAYER_COLORS.length]) || '#e2c56a';
+            const isActive = idx === gd.activeIdx;
+            const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+            const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+            const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                ? gd.throwerIndices[idx] : 0;
+            const dots = [0, 1, 2].map(d =>
+                `<div class="dot ${isActive && d < thrown ? 'thrown' : ''}"></div>`
+            ).join('');
+            let identity;
+            if (isDuo && window.FC_renderDoublesDuo) {
+                identity = FC_renderDoublesDuo(members, {
+                    isActive, throwerIdx, colorIndex: idx, dartsHtml: dots
+                });
+            } else {
+                const badge = FC_renderPlayerBadge(p.avatar, p.name, { colorIndex: idx, orbit: isActive });
+                identity = `${badge}<div class="dart-dots">${dots}</div>`;
+            }
+            return `<div class="sb-player color-${idx % 8} ${isActive ? 'active-turn' : ''}" style="--pcolor:${color}">
+                <div class="sb-player-top${isDuo ? ' is-duo' : ''}">
+                    ${identity}
+                </div>
+            </div>`;
+        }
+
+        function cricketGridColumns(leftCount, rightCount) {
+            const parts = [];
+            if (leftCount > 0) parts.push(`repeat(${leftCount}, var(--sb-player-col))`);
+            parts.push('var(--sb-num-col)');
+            if (rightCount > 0) parts.push(`repeat(${rightCount}, var(--sb-player-col))`);
+            return parts.join(' ');
+        }
+
+        function renderBoard(gd) {
+            const stack = document.getElementById('scoreboardStack');
+            const roster = document.getElementById('sbRoster');
+            const board = document.getElementById('scoreboard');
+            const players = gd.players || [];
+            const { left, right } = cricketSeatSides(players);
+            const thrown = gd.throwsThisTurn || 0;
+            renderThrowStrip(gd);
+            renderRound(gd);
+
+            const L = left.length;
+            const R = right.length;
+            const gridCols = cricketGridColumns(L, R);
+            if (stack) {
+                stack.style.setProperty('--sb-left', String(L));
+                stack.style.setProperty('--sb-right', String(R));
+                stack.style.setProperty('--sb-grid-cols', gridCols);
+                if (gd.isDoublesLineup) {
+                    stack.style.setProperty('--sb-player-col', 'var(--sb-player-col-doubles)');
+                } else {
+                    stack.style.removeProperty('--sb-player-col');
+                }
+            }
+
+            roster.innerHTML =
+                left.map((seat) => renderSeatPlayerHtml(seat, gd, thrown)).join('')
+                + '<div class="sb-roster-mid"></div>'
+                + right.map((seat) => renderSeatPlayerHtml(seat, gd, thrown)).join('');
+
+            const pointsCell = (seat) => {
+                const isActive = seat.idx === gd.activeIdx;
+                return `<div class="sb-points-cell ${isActive ? 'active-turn' : ''}">${seat.player.score || 0}</div>`;
+            };
+            const marksCell = (seat, key, closed) => {
+                const marks = (seat.player.marks && seat.player.marks[key]) || 0;
+                const open = marks >= 3;
+                return `<div class="sb-marks ${open ? 'open' : ''} ${closed ? 'dead' : ''}">${markGlyph(marks)}</div>`;
+            };
+
+            let html = `<div class="sb-header">`
+                + left.map(pointsCell).join('')
+                + '<div class="sb-corner">POINTS</div>'
+                + right.map(pointsCell).join('')
+                + `</div>`;
+
+            CRICKET_TARGETS.forEach(t => {
+                const key = String(t);
+                const closed = players.length > 0 && players.every(p => (p.marks && p.marks[key] || 0) >= 3);
+                html += `<div class="sb-row ${closed ? 'closed-row' : ''}">`
+                    + left.map((seat) => marksCell(seat, key, closed)).join('')
+                    + `<div class="sb-num ${t === 'bull' ? 'bull' : ''}">${targetLabel(t)}</div>`
+                    + right.map((seat) => marksCell(seat, key, closed)).join('')
+                    + `</div>`;
+            });
+
+            board.innerHTML = html;
+        }
+
+        function hideOverlay() {
+            const el = document.getElementById('cricketOverlay');
+            el.classList.remove('active', 'mode-next', 'mode-score', 'mode-open', 'mode-close', 'mode-winner', 'mode-round');
+            if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(el);
+            const saddle = el.querySelector('.ck-saddle');
+            if (saddle) saddle.classList.remove('duo-wrap');
+            const markDraw = document.getElementById('ckMarkDraw');
+            if (markDraw) {
+                markDraw.classList.add('hidden');
+                markDraw.innerHTML = '';
+            }
+            const ticks = document.getElementById('ckTickField');
+            if (ticks) ticks.innerHTML = '';
+            const winFx = document.getElementById('ckWinFx');
+            if (winFx) winFx.innerHTML = '';
+        }
+
+        function markSvgInner(kind) {
+            if (kind === 'slash') {
+                return `<line x1="3.2" y1="3.2" x2="20.8" y2="20.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`;
+            }
+            if (kind === 'x') {
+                return `<line x1="3.2" y1="3.2" x2="20.8" y2="20.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                        <line x1="20.8" y1="3.2" x2="3.2" y2="20.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`;
+            }
+            return `<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.4"/>
+                    <line x1="3.2" y1="3.2" x2="20.8" y2="20.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+                    <line x1="20.8" y1="3.2" x2="3.2" y2="20.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`;
+        }
+
+        function spawnScoreTicks() {
+            const field = document.getElementById('ckTickField');
+            if (!field) return;
+            field.innerHTML = '';
+            for (let i = 0; i < 14; i++) {
+                const tick = document.createElement('div');
+                tick.className = 'ck-tick';
+                tick.style.left = `${8 + Math.random() * 84}%`;
+                tick.style.top = `${20 + Math.random() * 55}%`;
+                tick.style.setProperty('--delay', `${(0.05 + Math.random() * 0.45).toFixed(2)}s`);
+                tick.style.setProperty('--dur', `${(0.7 + Math.random() * 0.5).toFixed(2)}s`);
+                field.appendChild(tick);
+            }
+        }
+
+        function spawnWinnerFx() {
+            const fx = document.getElementById('ckWinFx');
+            if (!fx) return;
+            fx.innerHTML = '';
+            const flightSvg = `<svg viewBox="0 0 24 36" aria-hidden="true">
+                <path d="M12 2 L16 14 L12 12 L8 14 Z" fill="#e2c56a"/>
+                <path d="M12 12 L12 34" stroke="#c4a35a" stroke-width="2" stroke-linecap="round"/>
+                <path d="M8 20 L12 16 L16 20" fill="none" stroke="#f5e3b5" stroke-width="1.5"/>
+            </svg>`;
+            for (let i = 0; i < 10; i++) {
+                const flight = document.createElement('div');
+                flight.className = 'ck-flight';
+                flight.style.left = `${6 + Math.random() * 88}%`;
+                flight.style.bottom = `${-10 - Math.random() * 20}%`;
+                flight.style.setProperty('--delay', `${(Math.random() * 2.8).toFixed(2)}s`);
+                flight.style.setProperty('--dur', `${(4.2 + Math.random() * 2.2).toFixed(2)}s`);
+                flight.style.setProperty('--rot', `${(-20 + Math.random() * 40).toFixed(1)}deg`);
+                flight.innerHTML = flightSvg;
+                fx.appendChild(flight);
+            }
+            const kinds = ['slash', 'x', 'circ'];
+            for (let i = 0; i < 28; i++) {
+                const drop = document.createElement('div');
+                drop.className = 'ck-mark-rain';
+                drop.style.left = `${4 + Math.random() * 92}%`;
+                drop.style.top = `${-8 - Math.random() * 20}%`;
+                drop.style.setProperty('--delay', `${(Math.random() * 1.8).toFixed(2)}s`);
+                drop.style.setProperty('--dur', `${(1.8 + Math.random() * 1.6).toFixed(2)}s`);
+                const kind = kinds[i % 3];
+                drop.innerHTML = `<svg viewBox="0 0 24 24">${markSvgInner(kind)}</svg>`;
+                fx.appendChild(drop);
+            }
+        }
+
+
+        function spawnChalkDust() {
+            const host = document.getElementById('ckChalkDust');
+            if (!host) return;
+            host.innerHTML = '';
+            for (let i = 0; i < 18; i++) {
+                const d = document.createElement('span');
+                d.className = 'ck-dust';
+                d.style.left = (20 + Math.random() * 60) + '%';
+                d.style.top = (30 + Math.random() * 40) + '%';
+                d.style.setProperty('--dx', ((Math.random() * 80) - 40).toFixed(0) + 'px');
+                d.style.setProperty('--dy', ((Math.random() * 60) - 10).toFixed(0) + 'px');
+                d.style.animationDelay = (Math.random() * 0.35).toFixed(2) + 's';
+                host.appendChild(d);
+            }
+        }
+
+        function showOverlay(mode, cfg) {
+            const el = document.getElementById('cricketOverlay');
+            hideOverlay();
+            el.classList.add('active', `mode-${mode}`);
+            document.getElementById('ckPennant').innerText = cfg.pennant || '';
+            document.getElementById('ckCallboard').innerText = cfg.callboard || '';
+            document.getElementById('ckBadge').innerText = cfg.badge || '';
+            document.getElementById('ckName').innerText = cfg.name || 'PLAYER';
+            document.getElementById('ckQuip').innerText = cfg.quip || '';
+            const saddle = document.querySelector('#cricketOverlay .ck-saddle');
+            const avatarEl = document.getElementById('ckAvatar');
+            if (Array.isArray(cfg.members) && cfg.members.length > 1 && saddle) {
+                saddle.classList.add('duo-wrap');
+                avatarEl.innerHTML = cfg.members.map(m =>
+                    `<div class="ck-saddle-item">${renderAvatarHtml(m.avatar, m.name)}</div>`
+                ).join('');
+            } else {
+                if (saddle) saddle.classList.remove('duo-wrap');
+                avatarEl.innerHTML = renderAvatarHtml(cfg.avatar, cfg.name);
+            }
+
+            const markDraw = document.getElementById('ckMarkDraw');
+            if (cfg.markKind) {
+                markDraw.classList.remove('hidden');
+                markDraw.innerHTML = `<svg viewBox="0 0 24 24">${markSvgInner(cfg.markKind)}</svg>`;
+            }
+
+            const metaScore = document.getElementById('ckMetaScore');
+            const metaRounds = document.getElementById('ckMetaRounds');
+            if (metaScore) metaScore.textContent = cfg.score != null ? String(cfg.score) : '0';
+            if (metaRounds) metaRounds.textContent = cfg.rounds != null ? String(cfg.rounds) : '1';
+
+            if (mode === 'score') spawnScoreTicks();
+            if (mode === 'round') spawnChalkDust();
+            if (mode === 'winner') {
+                spawnWinnerFx();
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.playIn(el);
+            }
+        }
+
+        function renderPhaseOverlays(gd) {
+            document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+
+            const phase = gd.phase || { type: 'playing' };
+            const phaseKey = `${phase.type}-${phase.startedAt}`;
+            if (phaseKey === lastPhaseKey) return;
+            lastPhaseKey = phaseKey;
+
+            hideOverlay();
+
+            if (phase.type === 'round_announce') {
+                const d = phase.data || {};
+                const r = d.round || 1;
+                showOverlay('round', {
+                    pennant: 'Pavilion Call',
+                    callboard: d.eyebrow || 'NEXT OVER',
+                    badge: d.title || ('ROUND ' + r),
+                    name: '',
+                    quip: d.subtitle || ('Over ' + r)
+                });
+                return;
+            }
+
+            if (phase.type === 'intermission') {
+                const name = phase.data.nextPlayerName || phase.data.nextTeamName || 'PLAYER';
+                showOverlay('next', {
+                    pennant: 'Call To The Oche',
+                    callboard: 'Up Next',
+                    badge: '',
+                    name,
+                    avatar: phase.data.avatar,
+                    quip: 'Your Throw'
+                });
+                return;
+            }
+
+            if (phase.type === 'cricket_score') {
+                const d = phase.data || {};
+                showOverlay('score', {
+                    pennant: 'On The Board',
+                    callboard: d.numberClosed ? 'Dead & Scored' : (d.opened ? 'Closed & Scored' : 'Points'),
+                    badge: `+${d.points || 0}`,
+                    name: d.playerName || 'PLAYER',
+                    avatar: d.avatar,
+                    quip: d.quip || `Total ${d.totalScore || 0}`
+                });
+                return;
+            }
+
+            if (phase.type === 'cricket_closed' || phase.type === 'cricket_open') {
+                const d = phase.data || {};
+                showOverlay('open', {
+                    pennant: 'Number Closed',
+                    callboard: 'Closed',
+                    badge: d.targetLabel || '—',
+                    name: d.playerName || 'PLAYER',
+                    avatar: d.avatar,
+                    quip: d.quip || 'Three Marks',
+                    markKind: 'circ'
+                });
+                return;
+            }
+
+            if (phase.type === 'cricket_dead' || phase.type === 'cricket_close') {
+                const d = phase.data || {};
+                showOverlay('close', {
+                    pennant: 'Shut Out',
+                    callboard: 'Dead',
+                    badge: d.targetLabel || '—',
+                    name: d.playerName || 'PLAYER',
+                    avatar: d.avatar,
+                    quip: d.quip || 'No More Points',
+                    markKind: 'circ'
+                });
+                return;
+            }
+
+            if (phase.type === 'winner') {
+                const d = phase.data || {};
+                showOverlay('winner', {
+                    pennant: 'Match Closed',
+                    callboard: 'Final Frame',
+                    badge: 'Champion',
+                    name: d.winnerName || 'PLAYER',
+                    avatar: d.avatar,
+                    members: d.members,
+                    quip: 'Cricket',
+                    score: d.score != null ? d.score : 0,
+                    rounds: d.rounds != null ? d.rounds : (gd.currentRound || 1)
+                });
+            }
+        }
+
+        function applyGameData(gd) {
+            if (!gd || gd.gameType !== 'cricket') return;
+            renderBoard(gd);
+            renderPhaseOverlays(gd);
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.data?.type !== 'SYNC_STATE') return;
+            const state = event.data.state;
+            if (!state || !state.gameData) return;
+            if (window.FlightDeckWinnerVideo) {
+                FlightDeckWinnerVideo.applyFromState(state);
+                FlightDeckWinnerVideo.applyScreenClass(document.getElementById('cricketOverlay'));
+            }
+            applyGameData(state.gameData);
+        });
+    </script>
+</body>
+</html>

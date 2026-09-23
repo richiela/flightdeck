@@ -1,0 +1,39 @@
+winner-cheers.mp3
+Source: Mixkit — "Crowd cheer" (mixkit-crowd-cheer-531)
+URL: https://mixkit.co/free-sound-effects/crowd-cheer/
+License: Mixkit License (free to use in projects)
+Notes: Played on all game winner screens (volume 0.4).
+
+winner-spongebob-no-skills.mp4
+Source: YouTube clip (SpongeBob — "You have no skills and you’re a loser")
+URL: https://www.youtube.com/watch?v=Yu7gSQ_swso
+Notes: Section 0:15–0:21 (~6s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+winner-rocky-champion.mp4
+Source: YouTube clip (Rocky II — Heavyweight Champion of the World)
+URL: https://www.youtube.com/watch?v=z_hfmThW4fs
+Notes: Section 1:57.5–2:05.3 (~7.85s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+winner-star-wars-throne.mp4
+Source: YouTube clip (Star Wars IV — Throne Room / End Title)
+URL: https://www.youtube.com/watch?v=yixG8pfncOs
+Notes: Section 1:36–1:44 (~8s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+winner-happy-gilmore.mp4
+Source: YouTube clip (Happy Gilmore — Happy Wins!)
+URL: https://www.youtube.com/watch?v=tyaA1uYdxUU
+Notes: Section 3:46–3:52 (~6s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+winner-karate-kid-crane.mp4
+Source: YouTube clip (The Karate Kid — Crane Kick)
+URL: https://www.youtube.com/watch?v=8cPM8DaOSFk
+Notes: Section 2:38–2:41.9 (~3.9s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+winner-seahawks-sb-lx.mp4
+Source: YouTube clip (Seattle Seahawks — Super Bowl LX victory vs. Patriots, final minutes)
+URL: https://www.youtube.com/watch?v=U1t5bfPUiPI
+Notes: Section 0:47–0:54 (~7s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+Winner videos: any public/assets/shared/winner-*.mp4 is picked at random (all games) when Video mode is on.
+Winner cheers: public/assets/shared/winner-cheers.mp3 on all winner screens.
+Prefer exporting/normalizing new clips to 1280×720 16:9 (pad, don’t crop).

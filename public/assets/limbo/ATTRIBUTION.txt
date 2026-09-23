@@ -1,0 +1,9 @@
+dino-blue.png
+Source: user-supplied blue brachiosaurus (RGBA, open eye, faces right). Left Limbo character.
+
+dino-red.png
+Source: user-supplied brick brachiosaurus (RGBA, open eye, faces left). Right Limbo character. Not CSS-flipped — art already faces inward.
+
+Retired 2026-09-17: dino.png (orange master), dino-source.jpg (photo-style source),
+dino-blue-ref.png (colour reference), giraffe-character.backup.html (the CSS giraffe
+pair Limbo used before the dino swap).

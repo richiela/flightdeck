@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>X01</title>
+    <style>
+        :root {
+            --ember: #c4784a;
+            --ember-bright: #e09a6a;
+            --slate-hi: #3a3f46;
+            --slate: #24282e;
+            --slate-deep: #121418;
+            --cream: #f0e6d8;
+            --gold: #d4b483;
+            --ink: #0a0b0c;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 28%, #3a3f46 0%, #24282e 42%, #121418 100%);
+            background: var(--page-bg);
+            color: #fff;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        body.overlay-active .arena {
+            filter: blur(3px) brightness(0.55);
+            transition: filter 0.25s ease;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid var(--gold);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted var(--gold);
+            border-radius: 8px;
+        }
+        .window-game-title {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: var(--gold);
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid var(--gold);
+            border-right: 4px solid var(--gold);
+        }
+
+        .rules-badge {
+            position: absolute;
+            top: 32px;
+            right: 32px;
+            z-index: 95;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            background: rgba(18, 20, 24, 0.92);
+            border: 3px solid #111;
+            border-radius: 6px;
+            box-shadow: 0 0 0 2px var(--gold);
+            pointer-events: none;
+            font-size: 0.72rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            line-height: 1;
+        }
+        .rules-badge .sep {
+            color: rgba(255,255,255,0.35);
+            font-weight: 700;
+        }
+        .rules-badge .sub {
+            color: #fff;
+            letter-spacing: 1.5px;
+        }
+
+        .checkout-banner {
+            position: absolute;
+            top: 36px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 96;
+            display: none;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 22px;
+            background: rgba(18, 20, 24, 0.94);
+            border: 3px solid #111;
+            border-radius: 6px;
+            box-shadow: 0 0 0 2px var(--gold), 0 12px 28px rgba(0,0,0,0.45);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .checkout-banner.is-visible { display: flex; }
+        .checkout-banner .checkout-eyebrow {
+            font-size: 0.7rem;
+            font-weight: 900;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--gold);
+            line-height: 1;
+        }
+        .checkout-banner .checkout-sep {
+            width: 2px;
+            height: 1.1em;
+            background: rgba(255,255,255,0.2);
+            flex-shrink: 0;
+        }
+        .checkout-banner .checkout-path {
+            font-size: 1.15rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #fff;
+            line-height: 1;
+            text-shadow: 0 0 18px rgba(224, 154, 106, 0.35);
+        }
+        body.overlay-active .checkout-banner { display: none !important; }
+
+        .arena {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 55px 40px 50px;
+            box-sizing: border-box;
+            gap: 18px;
+        }
+
+        .scoreboard-stack {
+            width: min(980px, 94vw);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            --cols: 2;
+        }
+
+        .sb-roster {
+            display: grid;
+            grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+            align-items: end;
+            justify-items: center;
+            overflow: visible;
+        }
+
+        .scoreboard {
+            width: 100%;
+            background: rgba(18, 20, 24, 0.82);
+            border: 4px solid #111;
+            border-radius: 14px;
+            box-shadow: 0 0 0 3px var(--gold), 0 18px 40px rgba(0,0,0,0.45);
+            overflow: hidden;
+        }
+
+        .score-columns {
+            display: grid;
+            grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+            align-items: stretch;
+        }
+
+        .score-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 28px 16px 22px;
+            border-right: 2px solid rgba(255,255,255,0.08);
+            position: relative;
+        }
+        .score-col:last-child { border-right: none; }
+        .score-col.active-turn {
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .score-col.active-turn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            box-shadow: inset 0 0 32px rgba(196, 120, 74, 0.14);
+            pointer-events: none;
+        }
+
+        .remaining-score {
+            font-size: clamp(3.8rem, 12vw, 7.2rem);
+            font-weight: 900;
+            line-height: 0.9;
+            letter-spacing: -2px;
+            color: var(--cream);
+            text-shadow: 0 4px 0 #111, 0 0 24px rgba(196, 120, 74, 0.22);
+            transition: color 0.2s ease, text-shadow 0.2s ease;
+        }
+        .score-col.active-turn .remaining-score {
+            color: #fff;
+            text-shadow: 0 4px 0 #111, 0 0 36px rgba(224, 154, 106, 0.5);
+        }
+
+        .sb-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 10px 4px;
+            position: relative;
+            overflow: visible;
+        }
+        .sb-player-top {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: calc(var(--fc-avatar-inplay) + 18px);
+            height: calc(var(--fc-avatar-inplay) + 18px);
+        }
+        .sb-player-top.is-duo {
+            width: auto;
+            min-width: calc(var(--fc-avatar-inplay) + 18px);
+        }
+        .sb-player-top.is-duo .fc-duo-row {
+            --fc-duo-pull: 14px;
+            --fc-duo-dart-gap: -4px;
+            position: relative;
+            justify-content: flex-start;
+            width: max-content;
+        }
+        .sb-player-top.is-duo .fc-duo-darts {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: var(--fc-duo-dart-gap);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .sb-player.active-turn .sb-player-top.is-duo .fc-duo-darts { opacity: 1; }
+
+        .dart-dots {
+            position: absolute;
+            left: calc(50% + (var(--fc-avatar-inplay) / 2) + 10px);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .sb-player.active-turn .dart-dots { opacity: 1; }
+
+        .throw-strip {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 48px;
+            padding: 8px 16px;
+            background: rgba(18, 20, 24, 0.82);
+            border: 3px solid #111;
+            border-radius: 12px;
+            box-shadow: 0 0 0 2px var(--gold);
+            z-index: 5;
+        }
+        .throw-strip-label {
+            font-size: 0.75rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            margin-right: 4px;
+        }
+        .throw-chip {
+            min-width: 72px;
+            height: 36px;
+            padding: 0 12px;
+            border-radius: 8px;
+            border: 2px solid rgba(255,255,255,0.25);
+            background: rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 900;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 1px;
+        }
+        .throw-chip.filled {
+            color: #fff;
+            border-color: #111;
+            background: rgba(255,255,255,0.12);
+            box-shadow: inset 0 0 0 2px rgba(226, 197, 106, 0.35);
+        }
+        .throw-chip .mult {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            border-radius: 4px;
+            background: var(--gold);
+            color: #111;
+            font-size: 0.75rem;
+            font-weight: 900;
+        }
+        .throw-chip .mult.d { background: #7AD7F0; }
+        .throw-chip .mult.t { background: #ff8a80; }
+        .throw-chip .val { font-size: 1rem; }
+        .throw-chip.miss .val {
+            color: rgba(255,255,255,0.55);
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+        }
+
+        /* --- Takeover overlays --- */
+        .x01-takeover {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            z-index: 500;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .x01-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            animation: overlayFadeIn 0.22s ease forwards;
+        }
+        .x01-takeover.mode-next.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(40, 90, 130, 0.35), transparent 55%),
+                rgba(6, 14, 28, 0.92);
+        }
+        .x01-takeover.mode-bust.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(140, 30, 35, 0.45), transparent 55%),
+                rgba(18, 6, 10, 0.95);
+            animation: overlayFadeIn 0.22s ease forwards, x01BustPulse 1.6s ease-in-out 0.2s infinite;
+        }
+        .x01-takeover.mode-checkout.active {
+            background:
+                radial-gradient(ellipse at 50% 35%, rgba(40, 120, 70, 0.4), transparent 55%),
+                rgba(4, 18, 14, 0.94);
+        }
+        .x01-takeover.mode-winner.active {
+            background:
+                radial-gradient(ellipse at 50% 25%, rgba(90, 70, 20, 0.45), transparent 50%),
+                rgba(4, 10, 18, 0.96);
+            z-index: 600;
+        }
+
+        .x01-flash {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            opacity: 0; background: rgba(255,255,255,0.14);
+        }
+        .mode-bust.active .x01-flash {
+            animation: x01BoardFlash 0.5s ease-out 0.05s forwards;
+            background: rgba(255, 60, 60, 0.18);
+        }
+        .mode-checkout.active .x01-flash {
+            animation: x01BoardFlash 0.55s ease-out 0.05s forwards;
+            background: rgba(124, 255, 178, 0.14);
+        }
+
+        .x01-pennant {
+            position: absolute; top: 0; left: 0; right: 0; height: 48px;
+            display: flex; align-items: stretch; z-index: 2;
+            transform: translateY(-100%); opacity: 0;
+        }
+        .x01-takeover.active .x01-pennant {
+            animation: x01PennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        .x01-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #c4a35a;
+            border-bottom: 3px solid rgba(226,197,106,0.85);
+        }
+        .mode-next .x01-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #7AD7F0; }
+        .mode-bust .x01-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #ff5252; }
+        .mode-checkout .x01-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #7CFFB2; }
+        .mode-winner .x01-pennant-check { background:
+            linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+            linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+            #d4b483; }
+
+        .x01-pennant-banner {
+            flex: 0 0 auto; min-width: 280px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 28px; background: #121418; border-bottom: 3px solid var(--gold);
+            color: var(--gold); font-size: 1.05rem; font-weight: 900; letter-spacing: 4px;
+            text-transform: uppercase; box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+        }
+        .mode-next .x01-pennant-banner { background: #0c2430; color: #7AD7F0; border-bottom-color: #7AD7F0; }
+        .mode-bust .x01-pennant-banner { background: #111; color: #ff8a80; border-bottom-color: #ff5252; }
+        .mode-checkout .x01-pennant-banner { background: #0d2a1a; color: #7CFFB2; border-bottom-color: #7CFFB2; }
+        .mode-winner .x01-pennant-banner { background: #121418; color: #d4b483; }
+
+        .x01-stage {
+            position: relative; z-index: 3;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            width: min(660px, 94vw);
+        }
+        .mode-next .x01-stage {
+            animation: x01SlideFromOche 0.5s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+        }
+
+        .x01-callboard {
+            font-size: 0.95rem; font-weight: 900; letter-spacing: 5px;
+            text-transform: uppercase; color: #c4a35a;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+            opacity: 0; transform: translateY(12px);
+        }
+        .mode-next .x01-callboard { color: #7AD7F0; }
+        .mode-bust .x01-callboard { color: #ff8a80; }
+        .mode-checkout .x01-callboard { color: #7CFFB2; }
+        .mode-winner .x01-callboard { color: #d4b483; }
+        .x01-takeover.active .x01-callboard {
+            animation: x01Reveal 0.35s ease 0.05s forwards;
+        }
+
+        .x01-badge {
+            width: 100%;
+            font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 900;
+            letter-spacing: 4px; text-transform: uppercase; color: #fff;
+            line-height: 0.95; text-align: center;
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(196, 163, 90, 0.35);
+            opacity: 0; transform: scale(2.2); filter: blur(8px);
+        }
+        .mode-bust .x01-badge,
+        .mode-checkout .x01-badge {
+            font-size: clamp(4.5rem, 16vw, 8rem);
+            letter-spacing: 2px;
+        }
+        .mode-bust .x01-badge {
+            text-shadow: 0 6px 0 #111, 0 0 40px rgba(255, 82, 82, 0.55);
+            animation: x01Slam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.06s forwards,
+                       x01GateShake 0.35s ease-out 0.42s both !important;
+        }
+        .mode-checkout .x01-badge {
+            text-shadow: 0 6px 0 #111, 0 0 40px rgba(124, 255, 178, 0.45);
+        }
+        .mode-winner .x01-badge {
+            font-size: clamp(2.8rem, 8vw, 4.6rem);
+            text-shadow: 0 4px 0 #111, 0 0 36px rgba(226, 197, 106, 0.5);
+        }
+        .mode-next .x01-badge { display: none; }
+        .x01-takeover.active:not(.mode-bust) .x01-badge {
+            animation: x01Slam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.08s forwards;
+        }
+
+        .x01-saddle {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 20px);
+            height: calc(var(--fc-avatar-overlay) + 20px);
+            border-radius: 50%; background: #fff; border: 5px solid #111;
+            box-shadow: 0 0 0 6px #c4a35a, 0 12px 28px rgba(0,0,0,0.45);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transform: scale(2.2); filter: blur(8px);
+        }
+        .x01-saddle.duo-wrap {
+            width: auto; height: auto;
+            border-radius: 0; background: transparent; border: none;
+            box-shadow: none; gap: 12px; filter: none;
+        }
+        .x01-saddle.duo-wrap .x01-saddle-item {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; overflow: hidden; border: 4px solid #d4b483;
+            background: #1a1510;
+        }
+        .mode-next .x01-saddle { box-shadow: 0 0 0 6px #7AD7F0, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-bust .x01-saddle { box-shadow: 0 0 0 6px #ff5252, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-checkout .x01-saddle { box-shadow: 0 0 0 6px #7CFFB2, 0 12px 28px rgba(0,0,0,0.45); }
+        .mode-winner .x01-saddle {
+            box-shadow: 0 0 0 7px #d4b483, 0 0 0 12px rgba(226,197,106,0.25), 0 14px 32px rgba(0,0,0,0.5);
+        }
+        .x01-takeover.active .x01-saddle {
+            animation: x01Slam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .mode-winner.active .x01-saddle {
+            animation: x01MedalSpin 0.85s cubic-bezier(0.2, 0.8, 0.25, 1) 0.1s forwards;
+        }
+        .x01-avatar {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; border: 4px solid #111; background: #111; overflow: hidden;
+        }
+        .x01-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .x01-avatar .initials {
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+            font-size: 2.6rem; font-weight: 900; color: #fff; background: #3a3f46;
+        }
+
+        .x01-name {
+            margin: 0; font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 900;
+            letter-spacing: 2px; text-transform: uppercase; color: #fff;
+            text-shadow: 0 3px 0 #111; text-align: center;
+            opacity: 0; transform: translateY(16px);
+        }
+        .x01-takeover.active .x01-name {
+            animation: x01Reveal 0.35s ease 0.18s forwards;
+        }
+
+        .x01-quip {
+            font-size: 1.15rem; font-weight: 900; letter-spacing: 3px;
+            text-transform: uppercase; color: #c4a35a;
+            opacity: 0; transform: translateY(16px);
+        }
+        .mode-next .x01-quip { color: #7AD7F0; }
+        .mode-bust .x01-quip { color: #ff8a80; }
+        .mode-checkout .x01-quip { color: #7CFFB2; }
+        .mode-winner .x01-quip { color: #d4b483; }
+        .x01-takeover.active .x01-quip {
+            animation: x01Reveal 0.35s ease 0.22s forwards;
+        }
+
+        .x01-meta {
+            display: none;
+            gap: 10px;
+            margin-top: 2px;
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        .mode-winner .x01-meta { display: flex; }
+        .mode-winner.active .x01-meta {
+            animation: x01Reveal 0.35s ease 0.28s forwards;
+        }
+        .x01-meta-chip {
+            padding: 8px 14px;
+            border: 2px solid #111;
+            border-radius: 6px;
+            background: rgba(226,197,106,0.12);
+            box-shadow: inset 0 0 0 1px rgba(226,197,106,0.45);
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .x01-meta-chip span { color: #d4b483; }
+
+        .x01-next-dart {
+            display: none;
+            width: 28px; height: 8px;
+            margin-top: 4px;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #7AD7F0, #fff);
+            box-shadow: 0 0 10px rgba(122,215,240,0.5);
+            opacity: 0;
+        }
+        .mode-next .x01-next-dart { display: block; }
+        .mode-next.active .x01-next-dart {
+            animation: x01DartTick 0.55s cubic-bezier(0.2, 0.85, 0.2, 1) 0.28s forwards;
+        }
+
+        .x01-stripe {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 16px;
+            background: repeating-linear-gradient(90deg, #c4a35a 0 16px, #111 16px 32px);
+            opacity: 0; transform: translateY(100%); z-index: 2;
+        }
+        .mode-next .x01-stripe { background: repeating-linear-gradient(90deg, #7AD7F0 0 16px, #111 16px 32px); }
+        .mode-bust .x01-stripe { background: repeating-linear-gradient(90deg, #ff5252 0 16px, #111 16px 32px); }
+        .mode-checkout .x01-stripe { background: repeating-linear-gradient(90deg, #7CFFB2 0 16px, #111 16px 32px); }
+        .mode-winner .x01-stripe { background: repeating-linear-gradient(90deg, #d4b483 0 16px, #111 16px 32px); }
+        .x01-takeover.active .x01-stripe {
+            animation: x01StripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+
+        /* Video split — cricket pattern: one stage + one video pane (winner & bust share pane) */
+        .x01-takeover .fd-winner-split {
+            flex-direction: column;
+            justify-content: center;
+            padding: 0;
+            gap: 0;
+            width: auto;
+            height: auto;
+        }
+        .x01-takeover .fd-winner-stage {
+            flex: 0 1 auto;
+            height: auto;
+        }
+        .x01-takeover .fd-winner-video-pane {
+            display: none;
+            position: relative;
+        }
+        .x01-takeover .fd-winner-video-pane video {
+            width: 100%;
+            max-width: 640px;
+            max-height: min(68vh, 520px);
+            object-fit: contain;
+        }
+        .x01-takeover.mode-winner .fd-winner-split,
+        .x01-takeover.mode-bust .fd-winner-split {
+            flex-direction: row;
+            justify-content: stretch;
+            width: 100%;
+            height: 100%;
+            padding: 48px 36px;
+            gap: 28px;
+        }
+        .x01-takeover.mode-winner .fd-winner-stage,
+        .x01-takeover.mode-bust .fd-winner-stage {
+            flex: 1 1 50%;
+            height: 100%;
+        }
+        .x01-takeover.mode-winner:not(.video-off) .fd-winner-video-pane,
+        .x01-takeover.mode-bust:not(.video-off) .fd-winner-video-pane {
+            display: flex;
+            flex: 1 1 50%;
+            align-items: center;
+            justify-content: center;
+        }
+        .x01-takeover.mode-winner #bustVideo,
+        .x01-takeover.mode-bust #winnerVideo {
+            display: none !important;
+        }
+
+        /* --- HELP OVERLAY --- */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(12, 26, 46, 0.95);
+            border: 2px solid #d4b483;
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: #d4b483; margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 0.95rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+
+        @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes x01PennantDrop {
+            0% { transform: translateY(-100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes x01StripeUp {
+            0% { transform: translateY(100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes x01Slam {
+            0% { transform: scale(2.4); filter: blur(8px); opacity: 0; }
+            100% { transform: scale(1); filter: blur(0); opacity: 1; }
+        }
+        @keyframes x01Reveal {
+            0% { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes x01BoardFlash {
+            0% { opacity: 0; }
+            30% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes x01GateShake {
+            0%, 100% { transform: translate(0,0) scale(1); }
+            25% { transform: translate(-4px, 1px) scale(1.01); }
+            50% { transform: translate(4px, -1px) scale(1.01); }
+            75% { transform: translate(-2px, 0) scale(1); }
+        }
+        @keyframes x01BustPulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.08); }
+        }
+        @keyframes x01SlideFromOche {
+            0% { opacity: 0; transform: translateX(48px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes x01DartTick {
+            0% { opacity: 0; transform: translateX(-24px) scaleX(0.4); }
+            100% { opacity: 1; transform: translateX(0) scaleX(1); }
+        }
+        @keyframes x01MedalSpin {
+            0% { opacity: 0; transform: scale(0.6) rotate(-180deg); filter: blur(8px); }
+            70% { opacity: 1; transform: scale(1.06) rotate(12deg); filter: blur(0); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+        }
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">X01</div>
+    </div>
+
+    <div class="rules-badge" id="rulesBadge" aria-label="Game rules">
+        <span id="rulesScore">301</span>
+        <span class="sep">·</span>
+        <span class="sub" id="rulesInOut">Setup</span>
+    </div>
+
+    <div class="checkout-banner" id="checkoutBanner" aria-live="polite" hidden>
+        <span class="checkout-eyebrow">Checkout</span>
+        <span class="checkout-sep" aria-hidden="true"></span>
+        <span class="checkout-path" id="checkoutPath"></span>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>X01 Rules</h3>
+        <p>• Choose start score (301–901), dart-in, and dart-out on Control when the match begins. Max 4 players.</p>
+        <p>• Subtract each dart after you’re in. Three darts per visit.</p>
+        <p>• Finish must match dart-out (none / double / triple). Going below 0 busts the visit.</p>
+        <p>• Bust restores score to start of visit and ends the turn.</p>
+    </div>
+
+    <div class="arena">
+        <div class="scoreboard-stack" id="scoreboardStack">
+            <div class="sb-roster" id="sbRoster"></div>
+            <div class="scoreboard" id="scoreboard">
+                <div class="score-columns" id="scoreColumns"></div>
+            </div>
+        </div>
+        <div class="throw-strip" id="throwStrip" aria-label="This visit's darts"></div>
+    </div>
+
+    <div class="x01-takeover" id="x01Overlay" style="--fd-winner-video-border: #d4b483;">
+        <div class="x01-flash" aria-hidden="true"></div>
+
+        <div class="x01-pennant">
+            <div class="x01-pennant-check"></div>
+            <div class="x01-pennant-banner" id="x01Pennant">Call</div>
+            <div class="x01-pennant-check"></div>
+        </div>
+
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="x01-stage">
+                    <div class="x01-callboard" id="x01Callboard">Event</div>
+                    <div class="x01-badge" id="x01Badge">—</div>
+                    <div class="x01-saddle">
+                        <div class="x01-avatar" id="x01Avatar"></div>
+                    </div>
+                    <h1 class="x01-name" id="x01Name">PLAYER</h1>
+                    <div class="x01-quip" id="x01Quip">—</div>
+                    <div class="x01-meta" id="x01Meta">
+                        <div class="x01-meta-chip"><span id="x01MetaScore">301</span></div>
+                        <div class="x01-meta-chip"><span id="x01MetaOut">None</span> out</div>
+                    </div>
+                    <div class="x01-next-dart" aria-hidden="true"></div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+                <video id="bustVideo" class="fd-event-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+
+        <div class="x01-stripe"></div>
+    </div>
+
+    <script>
+        let lastPhaseKey = '';
+        let lastGd = null;
+
+        const X01_SEGMENTS = (function buildSegments() {
+            const list = [];
+            for (let n = 20; n >= 1; n--) {
+                list.push({ label: 'T' + n, score: n * 3, mult: 3 });
+                list.push({ label: 'D' + n, score: n * 2, mult: 2 });
+                list.push({ label: 'S' + n, score: n, mult: 1 });
+            }
+            list.push({ label: 'DB', score: 50, mult: 2 });
+            list.push({ label: 'SB', score: 25, mult: 1 });
+            return list;
+        })();
+        const checkoutMemo = new Map();
+
+        function outAllowsSegment(seg, dartOut) {
+            if (dartOut === 'double') return seg.mult === 2;
+            if (dartOut === 'triple') return seg.mult === 3;
+            return true;
+        }
+
+        function findCheckoutPath(remaining, dartsLeft, dartOut) {
+            const score = Number(remaining);
+            const left = Math.max(0, Math.min(3, Number(dartsLeft) || 0));
+            const out = dartOut || 'none';
+            if (!Number.isFinite(score) || score <= 0 || left <= 0) return null;
+            if (out === 'double' && score > 170) return null;
+            if (out === 'triple' && score > 180) return null;
+            if (out === 'none' && score > 180) return null;
+
+            const key = score + '|' + left + '|' + out;
+            if (checkoutMemo.has(key)) return checkoutMemo.get(key);
+
+            function search(rem, darts) {
+                if (rem === 0) return [];
+                if (darts <= 0 || rem < 0) return null;
+
+                if (darts === 1) {
+                    for (const seg of X01_SEGMENTS) {
+                        if (seg.score !== rem) continue;
+                        if (!outAllowsSegment(seg, out)) continue;
+                        return [seg.label];
+                    }
+                    return null;
+                }
+
+                for (const seg of X01_SEGMENTS) {
+                    if (seg.score >= rem) continue;
+                    const next = rem - seg.score;
+                    if (out === 'double' && next === 1) continue;
+                    const path = search(next, darts - 1);
+                    if (path) return [seg.label].concat(path);
+                }
+                return null;
+            }
+
+            // Prefer the shortest legal finish with the darts remaining
+            let path = null;
+            for (let d = 1; d <= left; d++) {
+                path = search(score, d);
+                if (path) break;
+            }
+            checkoutMemo.set(key, path);
+            return path;
+        }
+
+        function syncCheckoutBanner(gd) {
+            const banner = document.getElementById('checkoutBanner');
+            const pathEl = document.getElementById('checkoutPath');
+            if (!banner || !pathEl) return;
+
+            const hide = () => {
+                banner.hidden = true;
+                banner.classList.remove('is-visible');
+                pathEl.textContent = '';
+            };
+
+            if (!gd || gd.phase?.type !== 'playing') {
+                hide();
+                return;
+            }
+            const player = (gd.players || [])[gd.activeIdx];
+            if (!player || player.hasOpened === false) {
+                hide();
+                return;
+            }
+            const remaining = playerRemaining(player);
+            const dartsLeft = Math.max(0, 3 - (gd.throwsThisTurn || 0));
+            const path = findCheckoutPath(remaining, dartsLeft, gd.dartOut || 'none');
+            if (!path || !path.length) {
+                hide();
+                return;
+            }
+            pathEl.textContent = path.join('  ');
+            banner.hidden = false;
+            banner.classList.add('is-visible');
+        }
+
+        function renderAvatarHtml(avatar, name) {
+            if (avatar) return `<img src="${avatar}" alt="">`;
+            const initials = (name || '?').trim().slice(0, 2).toUpperCase();
+            return `<div class="initials">${initials}</div>`;
+        }
+
+        function ruleLabel(rule) {
+            if (rule === 'double') return 'Double';
+            if (rule === 'triple') return 'Triple';
+            return 'None';
+        }
+
+        function syncRulesBadge(gd) {
+            const scoreEl = document.getElementById('rulesScore');
+            const ioEl = document.getElementById('rulesInOut');
+            const start = gd.startScore != null ? gd.startScore : 301;
+            if (scoreEl) scoreEl.textContent = String(start);
+            if (!ioEl) return;
+            if (gd.phase && gd.phase.type === 'setup') {
+                ioEl.textContent = 'Setup';
+                return;
+            }
+            const din = ruleLabel(gd.dartIn || 'none');
+            const dout = ruleLabel(gd.dartOut || 'none');
+            ioEl.textContent = `In ${din} · Out ${dout}`;
+        }
+
+        function defaultStartScore(gd) {
+            return gd && gd.startScore != null ? gd.startScore : 301;
+        }
+
+        function playerRemaining(p) {
+            if (p == null) return 301;
+            if (p.remaining != null) return p.remaining;
+            if (p.score != null) return p.score;
+            return 301;
+        }
+
+        function renderThrowStrip(gd) {
+            const strip = document.getElementById('throwStrip');
+            if (!strip) return;
+            const darts = Array.isArray(gd.turnDarts) ? gd.turnDarts : [];
+            let html = '<div class="throw-strip-label">Darts</div>';
+            for (let i = 0; i < 3; i++) {
+                const dart = darts[i];
+                if (!dart) {
+                    html += '<div class="throw-chip"></div>';
+                    continue;
+                }
+                if (!dart.mult) {
+                    html += `<div class="throw-chip filled miss"><span class="val">${dart.label || 'MISS'}</span></div>`;
+                } else {
+                    const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+                    html += `<div class="throw-chip filled">
+                        <span class="mult ${mClass}">${dart.mult}</span>
+                        <span class="val">${dart.label}</span>
+                    </div>`;
+                }
+            }
+            strip.innerHTML = html;
+        }
+
+        function renderBoard(gd) {
+            const stack = document.getElementById('scoreboardStack');
+            const roster = document.getElementById('sbRoster');
+            const columns = document.getElementById('scoreColumns');
+            const players = gd.players || [];
+            const cols = String(Math.max(players.length, 1));
+            if (stack) stack.style.setProperty('--cols', cols);
+            if (roster) roster.style.setProperty('--cols', cols);
+            if (columns) columns.style.setProperty('--cols', cols);
+            syncRulesBadge(gd);
+            syncCheckoutBanner(gd);
+
+            const thrown = gd.throwsThisTurn || 0;
+            renderThrowStrip(gd);
+
+            let rosterHtml = '';
+            players.forEach((p, idx) => {
+                const color = (window.FC_PLAYER_COLORS && FC_PLAYER_COLORS[idx % FC_PLAYER_COLORS.length]) || '#d4b483';
+                const isActive = idx === gd.activeIdx;
+                const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+                const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                    ? gd.throwerIndices[idx] : 0;
+                const dots = [0, 1, 2].map(d =>
+                    `<div class="dot ${isActive && d < thrown ? 'thrown' : ''}"></div>`
+                ).join('');
+                let identity;
+                if (isDuo && window.FC_renderDoublesDuo) {
+                    identity = FC_renderDoublesDuo(members, {
+                        isActive, throwerIdx, colorIndex: idx, dartsHtml: dots
+                    });
+                } else {
+                    const badge = FC_renderPlayerBadge(p.avatar, p.name, { colorIndex: idx, orbit: isActive });
+                    identity = `${badge}<div class="dart-dots">${dots}</div>`;
+                }
+                rosterHtml += `<div class="sb-player color-${idx % 8} ${isActive ? 'active-turn' : ''}" style="--pcolor:${color}">
+                    <div class="sb-player-top${isDuo ? ' is-duo' : ''}">
+                        ${identity}
+                    </div>
+                </div>`;
+            });
+            if (roster) roster.innerHTML = rosterHtml;
+
+            let colHtml = '';
+            players.forEach((p, idx) => {
+                const isActive = idx === gd.activeIdx;
+                const remaining = playerRemaining(p);
+                colHtml += `<div class="score-col color-${idx % 8} ${isActive ? 'active-turn' : ''}">
+                    <div class="remaining-score">${remaining}</div>
+                </div>`;
+            });
+            if (columns) columns.innerHTML = colHtml;
+        }
+
+        function hideOverlay() {
+            const el = document.getElementById('x01Overlay');
+            if (!el) return;
+            el.classList.remove('active', 'mode-next', 'mode-bust', 'mode-checkout', 'mode-winner');
+            document.body.classList.remove('overlay-active');
+            if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(el);
+            const saddle = el.querySelector('.x01-saddle');
+            if (saddle) saddle.classList.remove('duo-wrap');
+        }
+
+        function showOverlay(mode, cfg) {
+            const el = document.getElementById('x01Overlay');
+            hideOverlay();
+            el.classList.add('active', `mode-${mode}`);
+            document.body.classList.add('overlay-active');
+
+            document.getElementById('x01Pennant').innerText = cfg.pennant || '';
+            document.getElementById('x01Callboard').innerText = cfg.callboard || '';
+            document.getElementById('x01Badge').innerText = cfg.badge || '';
+            document.getElementById('x01Name').innerText = cfg.name || 'PLAYER';
+            document.getElementById('x01Quip').innerText = cfg.quip || '';
+
+            const saddle = el.querySelector('.x01-saddle');
+            const avatarEl = document.getElementById('x01Avatar');
+            if (Array.isArray(cfg.members) && cfg.members.length > 1 && saddle) {
+                saddle.classList.add('duo-wrap');
+                avatarEl.innerHTML = cfg.members.map(m =>
+                    `<div class="x01-saddle-item">${renderAvatarHtml(m.avatar, m.name)}</div>`
+                ).join('');
+            } else {
+                if (saddle) saddle.classList.remove('duo-wrap');
+                avatarEl.innerHTML = renderAvatarHtml(cfg.avatar, cfg.name);
+            }
+
+            const metaScore = document.getElementById('x01MetaScore');
+            const metaOut = document.getElementById('x01MetaOut');
+            if (metaScore) {
+                metaScore.textContent = cfg.remaining != null
+                    ? String(cfg.remaining)
+                    : String(defaultStartScore(lastGd));
+            }
+            if (metaOut) {
+                metaOut.textContent = cfg.outLabel || ruleLabel((lastGd && lastGd.dartOut) || 'none');
+            }
+
+            if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.applyScreenClass(el);
+
+            if (mode === 'bust' && window.FlightDeckWinnerVideo) {
+                FlightDeckWinnerVideo.playBustIn(el);
+            }
+            if (mode === 'winner' && window.FlightDeckWinnerVideo) {
+                FlightDeckWinnerVideo.playIn(el);
+            }
+        }
+
+        function renderPhaseOverlays(gd) {
+            document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+
+            const phase = gd.phase || { type: 'playing' };
+            const phaseKey = `${phase.type}-${phase.startedAt}`;
+            if (phaseKey === lastPhaseKey) return;
+            lastPhaseKey = phaseKey;
+
+            hideOverlay();
+
+            if (phase.type === 'playing') return;
+
+            if (phase.type === 'intermission' || phase.type === 'next') {
+                const d = phase.data || {};
+                const name = d.nextPlayerName || d.nextTeamName || 'PLAYER';
+                showOverlay('next', {
+                    pennant: 'Call To The Oche',
+                    callboard: 'Up Next',
+                    badge: '',
+                    name,
+                    avatar: d.avatar,
+                    members: d.members,
+                    quip: 'Your Throw'
+                });
+                return;
+            }
+
+            if (phase.type === 'bust') {
+                const d = phase.data || {};
+                showOverlay('bust', {
+                    pennant: 'No Finish',
+                    callboard: 'Bust',
+                    badge: 'BUST',
+                    name: d.playerName || d.teamName || 'PLAYER',
+                    avatar: d.avatar,
+                    members: d.members,
+                    quip: d.quip || 'Score Restored',
+                    remaining: d.remaining != null ? d.remaining : d.score
+                });
+                return;
+            }
+
+            if (phase.type === 'checkout') {
+                const d = phase.data || {};
+                showOverlay('checkout', {
+                    pennant: 'On The Wire',
+                    callboard: 'Checkout',
+                    badge: d.checkoutLabel || (d.remaining === 0 ? 'OUT!' : 'CHECKOUT'),
+                    name: d.playerName || d.teamName || 'PLAYER',
+                    avatar: d.avatar,
+                    members: d.members,
+                    quip: d.quip || 'Straight Out',
+                    remaining: 0
+                });
+                return;
+            }
+
+            if (phase.type === 'winner') {
+                const d = phase.data || {};
+                const start = lastGd && lastGd.startScore != null ? lastGd.startScore : 301;
+                const dout = ruleLabel((lastGd && lastGd.dartOut) || 'none');
+                showOverlay('winner', {
+                    pennant: 'Match Closed',
+                    callboard: 'Final Frame',
+                    badge: 'Champion',
+                    name: d.winnerName || 'PLAYER',
+                    avatar: d.avatar,
+                    members: d.members,
+                    quip: `${start} · Out ${dout}`,
+                    remaining: start,
+                    outLabel: dout
+                });
+            }
+        }
+
+        function applyGameData(gd) {
+            if (!gd || gd.gameType !== 'x01') return;
+            lastGd = gd;
+            renderBoard(gd);
+            renderPhaseOverlays(gd);
+        }
+
+        function ingestViewerState(state) {
+            if (!state || !window.FlightDeckWinnerVideo) return;
+            const ingest = FlightDeckWinnerVideo.ingestState || FlightDeckWinnerVideo.applyFromState;
+            if (ingest) ingest.call(FlightDeckWinnerVideo, state);
+            FlightDeckWinnerVideo.applyScreenClass(document.getElementById('x01Overlay'));
+        }
+
+        window.addEventListener('message', (event) => {
+            if (event.data?.type !== 'SYNC_STATE') return;
+            const state = event.data.state;
+            if (!state || !state.gameData) return;
+            ingestViewerState(state);
+            applyGameData(state.gameData);
+        });
+
+        if (window.FC_syncWindowTitleBackground) FC_syncWindowTitleBackground();
+    </script>
+</body>
+</html>

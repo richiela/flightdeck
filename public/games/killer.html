@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>Killer</title>
+    <style>
+        :root {
+            --magenta: #7a1f3d;
+            --magenta-dark: #5c1730;
+            --magenta-deep: #4a1226;
+            --cream: #f5ede0;
+            --brown: #4a2c1a;
+            --gold: #c5a059;
+            --gold-glow: #f5e3b5;
+            /* ← singles dart↔avatar pull (left/right sides); higher = closer, keeps L/R symmetry */
+            --killer-singles-dart-pull: 8px;
+            --pillar-0: var(--fc-p0);
+            --pillar-1: var(--fc-p1);
+            --pillar-2: var(--fc-p2);
+            --pillar-3: var(--fc-p3);
+            --pillar-4: var(--fc-p4);
+            --pillar-5: var(--fc-p5);
+            --pillar-6: var(--fc-p6);
+            --pillar-7: var(--fc-p7);
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 30%, var(--magenta) 0%, var(--magenta-dark) 45%, var(--magenta-deep) 100%);
+            background: var(--page-bg);
+            color: #fff;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid var(--gold);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted var(--gold);
+            border-radius: 8px;
+        }
+
+        .window-game-title {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: var(--gold);
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid var(--gold);
+            border-right: 4px solid var(--gold);
+        }
+
+        .arena {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 30px;
+            box-sizing: border-box;
+            gap: 28px;
+        }
+
+        .board-stage {
+            position: relative;
+            flex: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        .board-wrap {
+            position: relative;
+            width: min(82vh, 62vw);
+            height: min(82vh, 62vw);
+            max-width: 750px;
+            max-height: 750px;
+        }
+
+        .dartboard-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            filter: drop-shadow(0 0 18px rgba(255, 70, 130, 0.2)) drop-shadow(0 12px 28px rgba(0,0,0,0.35));
+        }
+
+        .board-base {
+            fill: #1a1620;
+        }
+
+        .board-unassigned-segment {
+            stroke: rgba(0, 0, 0, 0.45);
+        }
+
+        .board-disc {
+            fill: none;
+            stroke: rgba(255, 100, 160, 0.45);
+            stroke-width: 2.5;
+        }
+
+        .board-ring {
+            fill: none;
+            stroke: rgba(245, 237, 224, 0.12);
+            stroke-width: 1;
+        }
+
+        .board-sub-segment {
+            stroke: rgba(0, 0, 0, 0.55);
+            stroke-width: 0.7;
+            paint-order: fill stroke;
+            transition: fill 0.3s ease;
+        }
+
+        .board-sub-segment.last-hit {
+            filter: none;
+        }
+
+        .board-sub-segment.strike-flash {
+            animation: wedgeStrikeFlash 0.9s ease forwards;
+        }
+
+        .board-sub-segment.mark-flash {
+            animation: wedgeMarkFlash 0.9s ease forwards;
+        }
+
+        @keyframes wedgeStrikeFlash {
+            0%, 30%, 60% {
+                opacity: 1;
+                filter: brightness(1.35);
+            }
+            15%, 45%, 75% {
+                opacity: 0.2;
+                filter: brightness(1);
+            }
+            100% {
+                opacity: 1;
+                filter: brightness(1);
+            }
+        }
+
+        @keyframes wedgeMarkFlash {
+            0%, 30%, 60% {
+                opacity: 0.2;
+                filter: brightness(1);
+            }
+            15%, 45%, 75% {
+                opacity: 1;
+                filter: brightness(1.4);
+            }
+            100% {
+                opacity: 1;
+                filter: brightness(1);
+            }
+        }
+
+        .board-player-segment {
+            stroke-width: 0.8;
+            paint-order: fill stroke;
+        }
+
+        /* SAVED wedge pulse (player-color rim) — live copy below; restore from this if needed:
+           animation: wedgeActivePulse 1.8s linear infinite;
+           keyframes 40% / 70% / 95% stroke color-mix on --wedge-pulse, stroke-width 1, no drop-shadow.
+        */
+        /* Active thrower's wedge — smooth player-color rim (no drop-shadow spike at peak) */
+        .board-wedge-underlay.active-turn {
+            animation: wedgeActivePulse 1.8s linear infinite;
+        }
+        @keyframes wedgeActivePulse {
+            0%, 100% {
+                stroke: color-mix(in srgb, var(--wedge-pulse, #fff) 40%, transparent);
+                stroke-width: 1;
+            }
+            25%, 75% {
+                stroke: color-mix(in srgb, var(--wedge-pulse, #fff) 70%, transparent);
+                stroke-width: 1;
+            }
+            50% {
+                stroke: color-mix(in srgb, var(--wedge-pulse, #fff) 95%, transparent);
+                stroke-width: 1;
+            }
+        }
+
+        .board-labels {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .edge-player {
+            position: absolute;
+            width: 0;
+            height: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .edge-player.eliminated {
+            opacity: 0.25;
+            filter: grayscale(1);
+        }
+
+        .edge-number {
+            position: absolute;
+            left: 0;
+            top: 0;
+            transform: translate(-50%, -50%);
+            font-size: 2.0rem;
+            font-weight: 900;
+            line-height: 1;
+            white-space: nowrap;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+            z-index: 2;
+        }
+
+        .edge-player.active-turn .edge-number {
+            text-shadow:
+                0 0 12px currentColor,
+                0 2px 8px rgba(0, 0, 0, 0.45);
+        }
+
+        .edge-profile {
+            position: absolute;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+        }
+
+        .edge-profile-left,
+        .edge-profile-right,
+        .edge-profile-vertical {
+            left: 0;
+            right: auto;
+        }
+
+        .edge-identity {
+            width: calc(var(--fc-avatar-inplay) + 70px); /* 2×20 slots + 2×6 gaps + badge frame */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .edge-identity-above {
+            flex-direction: column-reverse;
+        }
+
+        /* Above/below: badge only (darts absolute) so -50% centers the circle on the number */
+        .edge-identity-stacked {
+            width: calc(var(--fc-avatar-inplay) + 18px);
+            position: relative;
+        }
+
+        .edge-avatar-wrap {
+            position: relative;
+            width: calc(var(--fc-avatar-inplay) + 18px);
+            height: calc(var(--fc-avatar-inplay) + 18px);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+        }
+
+        /* FC_ACTIVE_RING: old ::before glow removed; ring/glow from shared-player-theme.css */
+
+        .edge-avatar-row {
+            display: grid;
+            grid-template-columns: 20px calc(var(--fc-avatar-inplay) + 18px) 20px;
+            column-gap: 0px;
+            align-items: center;
+            justify-content: center;
+            width: calc(var(--fc-avatar-inplay) + 70px);
+        }
+
+        /* Doubles: keep singles-sized slot; second avatar grows outward from it */
+        .edge-player .fc-duo-row {
+            --fc-duo-pull: 14px; /* higher = closer avatars */
+            --fc-duo-dart-gap: -4px; /* ← dart counter distance (lower = closer to pair) */
+        }
+        /* Darts outside the pair: left of left-side duos, right of right-side (via dartsHtml) */
+        .edge-player .fc-duo-row.has-darts-left .fc-duo-darts {
+            margin-left: 0;
+            margin-right: var(--fc-duo-dart-gap);
+        }
+        .edge-player .fc-duo-darts .dart-dots {
+            height: auto;
+        }
+        .edge-avatar-wrap.is-duo {
+            overflow: visible;
+        }
+        .edge-avatar-wrap.is-duo .fc-duo-row.is-duo {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        /* Left side of board: pin inner avatar (toward number), grow further left */
+        .edge-avatar-wrap.is-duo[data-duo-grow="left"] .fc-duo-row.is-duo {
+            right: 0;
+            left: auto;
+        }
+        /* Right side of board: pin inner avatar, grow further right */
+        .edge-avatar-wrap.is-duo[data-duo-grow="right"] .fc-duo-row.is-duo {
+            left: 0;
+            right: auto;
+        }
+        /* Above/below: center duo on the singles avatar spot */
+        .edge-avatar-wrap.is-duo[data-duo-grow="center"] .fc-duo-row.is-duo {
+            left: 50%;
+            right: auto;
+            transform: translate(-50%, -50%);
+        }
+        .kt-avatar.duo-wrap {
+            width: auto; height: auto;
+            display: flex; gap: 12px;
+            background: transparent; border: none;
+        }
+        .kt-avatar.duo-wrap .kt-avatar-item {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; overflow: hidden; border: 4px solid #fff;
+            background: #111;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .kt-avatar.duo-wrap .kt-avatar-item img { width: 100%; height: 100%; object-fit: cover; }
+
+        .edge-dart-slot {
+            width:20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            align-self: center;
+            height: var(--fc-avatar-inplay);
+        }
+        /* Mirrored pull via translate (margins do nothing in fixed grid tracks).
+           Higher --killer-singles-dart-pull = closer to avatar; L/R stay symmetric. */
+        .edge-avatar-row .edge-dart-slot:first-child:not(:empty) {
+            transform: translateX(var(--killer-singles-dart-pull));
+        }
+        .edge-avatar-row .edge-dart-slot:last-child:not(:empty) {
+            transform: translateX(calc(-1 * var(--killer-singles-dart-pull)));
+        }
+
+        .edge-darts-float {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            pointer-events: none;
+        }
+        .edge-darts-float.left { right: calc(100% + 6px); }
+        .edge-darts-float.right { left: calc(100% + 6px); }
+
+        .dart-dots {
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            height: 100%;
+        }
+
+        .dart-dots-idle .dart-dot {
+            visibility: hidden;
+        }
+
+        /* size/idle/thrown from shared-player-theme.css FC_DART_COUNTER */
+
+        .rounds-tracker {
+            position: fixed;
+            right: 36px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            z-index: 80;
+            pointer-events: none;
+        }
+
+        .rounds-label {
+            font-size: 0.72rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(245, 237, 224, 0.8);
+            margin-bottom: 4px;
+        }
+
+        .rounds-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .rounds-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid rgba(245, 237, 224, 0.5);
+            background: transparent;
+            transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .rounds-dot.completed {
+            background: rgba(245, 237, 224, 0.8);
+            border-color: rgba(245, 237, 224, 0.8);
+        }
+
+        .rounds-dot.active {
+            background: #fff;
+            border-color: #fff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
+        }
+
+        .rounds-divider {
+            display: flex;
+            align-items: center;
+            width: 36px;
+            margin: 2px 0;
+        }
+
+        .rounds-divider::before,
+        .rounds-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(245, 237, 224, 0.35);
+        }
+
+        .rounds-divider span {
+            font-size: 0.68rem;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+            color: rgba(245, 237, 224, 0.75);
+            padding: 0 5px;
+        }
+
+        /* --- KILLER TAKEOVERS (noir assassin) --- */
+        .killer-takeover, .match-winner-takeover {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+        .killer-takeover { z-index: 500; }
+        .match-winner-takeover { z-index: 600; background: rgba(6, 2, 6, 0); }
+        .killer-takeover.active, .match-winner-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            backdrop-filter: blur(6px) saturate(0.85);
+            -webkit-backdrop-filter: blur(6px) saturate(0.85);
+            animation: killerFadeIn 0.28s ease forwards;
+        }
+        .killer-takeover.mode-boost.active { background: rgba(8, 14, 12, 0.9); }
+        .killer-takeover.mode-knock.active { background: rgba(18, 4, 8, 0.92); }
+        .killer-takeover.mode-became.active { background: rgba(10, 6, 4, 0.92); }
+        .killer-takeover.mode-lost.active { background: rgba(12, 10, 10, 0.94); }
+        .killer-takeover.mode-death.active { background: rgba(4, 0, 2, 0.95); }
+        .killer-takeover.mode-next.active { background: rgba(10, 4, 8, 0.92); }
+        .match-winner-takeover.active { background: rgba(8, 4, 8, 0.94); }
+
+        .kt-vignette {
+            position: absolute; inset: 0; z-index: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.72) 100%),
+                repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,0.015) 3px 4px);
+        }
+        .killer-takeover.mode-death .kt-vignette {
+            background:
+                radial-gradient(ellipse at center, rgba(120,0,20,0.25) 0%, transparent 45%, rgba(0,0,0,0.85) 100%),
+                repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,60,60,0.03) 3px 4px);
+        }
+
+        .kt-crosshair {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0.35;
+            background:
+                linear-gradient(rgba(197,160,89,0.35), rgba(197,160,89,0.35)) center / 1px 100% no-repeat,
+                linear-gradient(rgba(197,160,89,0.35), rgba(197,160,89,0.35)) center / 100% 1px no-repeat;
+        }
+        .killer-takeover.mode-knock .kt-crosshair,
+        .killer-takeover.mode-death .kt-crosshair {
+            background:
+                linear-gradient(rgba(190,40,60,0.45), rgba(190,40,60,0.45)) center / 1px 100% no-repeat,
+                linear-gradient(rgba(190,40,60,0.45), rgba(190,40,60,0.45)) center / 100% 1px no-repeat;
+        }
+
+        .kt-rings {
+            position: absolute;
+            width: min(62vh, 62vw); height: min(62vh, 62vw);
+            border-radius: 50%;
+            border: 1px solid rgba(197,160,89,0.22);
+            z-index: 1; pointer-events: none;
+        }
+        .kt-rings::before, .kt-rings::after {
+            content: ''; position: absolute; inset: 16%; border-radius: 50%;
+            border: 1px solid rgba(197,160,89,0.16);
+        }
+        .kt-rings::after { inset: 34%; border-color: rgba(197,160,89,0.28); }
+        .killer-takeover.active .kt-rings,
+        .match-winner-takeover.active .kt-rings {
+            animation: killerRingPulse 3s ease-in-out infinite;
+        }
+        .killer-takeover.mode-knock .kt-rings,
+        .killer-takeover.mode-death .kt-rings { border-color: rgba(190,40,60,0.3); }
+        .killer-takeover.mode-knock .kt-rings::before,
+        .killer-takeover.mode-knock .kt-rings::after,
+        .killer-takeover.mode-death .kt-rings::before,
+        .killer-takeover.mode-death .kt-rings::after { border-color: rgba(190,40,60,0.22); }
+        .killer-takeover.mode-boost .kt-rings { border-color: rgba(80,180,120,0.28); }
+        .killer-takeover.mode-boost .kt-rings::before,
+        .killer-takeover.mode-boost .kt-rings::after { border-color: rgba(80,180,120,0.18); }
+
+        .kt-slash {
+            position: absolute; inset: -20%; z-index: 1; pointer-events: none; opacity: 0;
+            background: linear-gradient(115deg, transparent 42%, rgba(190,40,60,0.18) 49%, rgba(190,40,60,0.55) 50%, rgba(190,40,60,0.18) 51%, transparent 58%);
+        }
+        .killer-takeover.mode-knock.active .kt-slash,
+        .killer-takeover.mode-death.active .kt-slash {
+            opacity: 1;
+            animation: killerSlashIn 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        .kt-card {
+            position: relative;
+            z-index: 3;
+            width: min(520px, 92vw);
+            padding: 34px 36px 38px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            background:
+                linear-gradient(160deg, rgba(28,18,22,0.97) 0%, rgba(12,8,10,0.98) 100%);
+            border: 1px solid rgba(197,160,89,0.45);
+            border-radius: 2px;
+            clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
+            box-shadow:
+                0 0 0 1px rgba(0,0,0,0.8),
+                0 25px 60px rgba(0,0,0,0.55),
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            transform: translateY(18px) scale(0.96);
+            opacity: 0;
+        }
+        .killer-takeover.active .kt-card,
+        .match-winner-takeover.active .kt-card {
+            animation: killerCardIn 0.55s cubic-bezier(0.16, 0.84, 0.25, 1) forwards;
+        }
+        .kt-card::before {
+            content: '';
+            position: absolute;
+            inset: 10px;
+            border: 1px solid rgba(197,160,89,0.18);
+            pointer-events: none;
+        }
+        .kt-card::after {
+            content: 'CLASSIFIED';
+            position: absolute;
+            top: 14px; left: 18px;
+            font-size: 0.58rem;
+            letter-spacing: 3px;
+            color: rgba(197,160,89,0.45);
+            font-weight: 800;
+        }
+
+        .killer-takeover.mode-boost .kt-card {
+            border-color: rgba(90, 190, 130, 0.5);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 0 40px rgba(40,120,80,0.18), 0 25px 60px rgba(0,0,0,0.55);
+        }
+        .killer-takeover.mode-knock .kt-card {
+            border-color: rgba(190, 50, 70, 0.55);
+            transform: translateY(18px) scale(0.96) rotate(-1deg);
+        }
+        .killer-takeover.mode-became .kt-card {
+            border-color: rgba(197,160,89,0.7);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 0 50px rgba(197,160,89,0.15), 0 25px 60px rgba(0,0,0,0.55);
+        }
+        .killer-takeover.mode-lost .kt-card {
+            border-color: rgba(120,120,120,0.45);
+            filter: grayscale(0.35);
+        }
+        .killer-takeover.mode-death .kt-card {
+            border-color: rgba(160, 30, 45, 0.7);
+            background: linear-gradient(160deg, rgba(40,8,14,0.98) 0%, rgba(8,2,4,0.99) 100%);
+        }
+        .killer-takeover.mode-next .kt-card {
+            border-color: rgba(197,160,89,0.65);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 0 44px rgba(197,160,89,0.12), 0 25px 60px rgba(0,0,0,0.55);
+        }
+        .match-winner-takeover .kt-card {
+            border-color: rgba(197,160,89,0.75);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 0 60px rgba(197,160,89,0.2), 0 25px 60px rgba(0,0,0,0.55);
+        }
+        .match-winner-takeover .kt-card::after { content: 'TOP KILLER'; color: rgba(197,160,89,0.6); }
+        .killer-takeover.mode-death .kt-card::after { content: 'TERMINATED'; color: rgba(220,70,80,0.55); }
+        .killer-takeover.mode-lost .kt-card::after { content: 'REVOKED'; color: rgba(160,160,160,0.5); }
+        .killer-takeover.mode-boost .kt-card::after { content: 'MARKED'; color: rgba(100,200,140,0.5); }
+        .killer-takeover.mode-knock .kt-card::after { content: 'WOUNDED'; color: rgba(220,80,90,0.5); }
+        .killer-takeover.mode-became .kt-card::after { content: 'AUTHORIZED'; color: rgba(197,160,89,0.55); }
+        .killer-takeover.mode-next .kt-card::after { content: 'STANDBY'; color: rgba(197,160,89,0.55); }
+
+        .kt-eyebrow {
+            margin-top: 8px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: rgba(197,160,89,0.85);
+            border-bottom: 1px solid rgba(197,160,89,0.35);
+            padding-bottom: 6px;
+            background: none;
+            border-radius: 0;
+        }
+        .killer-takeover.mode-knock .kt-eyebrow,
+        .killer-takeover.mode-death .kt-eyebrow { color: #e07080; border-bottom-color: rgba(190,50,70,0.45); }
+        .killer-takeover.mode-boost .kt-eyebrow { color: #7dcea0; border-bottom-color: rgba(90,190,130,0.4); }
+        .killer-takeover.mode-lost .kt-eyebrow { color: #aaa; border-bottom-color: rgba(140,140,140,0.35); }
+
+        .kt-badge {
+            font-size: clamp(2.4rem, 7vw, 3.8rem);
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: #f5ede0;
+            line-height: 0.95;
+            text-shadow: 0 0 24px rgba(197,160,89,0.25);
+        }
+        .killer-takeover.mode-boost .kt-badge { color: #9af0c0; text-shadow: 0 0 28px rgba(80,200,130,0.35); }
+        .killer-takeover.mode-knock .kt-badge,
+        .killer-takeover.mode-death .kt-badge { color: #ff6b7a; text-shadow: 0 0 28px rgba(200,40,60,0.4); }
+        .killer-takeover.mode-lost .kt-badge {
+            color: #bbb;
+            text-decoration: line-through;
+            text-decoration-thickness: 3px;
+            text-shadow: none;
+        }
+        .killer-takeover.mode-became .kt-badge,
+        .killer-takeover.mode-next .kt-badge,
+        .match-winner-takeover .kt-badge {
+            color: var(--gold-glow);
+            text-shadow: 0 0 30px rgba(197,160,89,0.45);
+        }
+
+        .kt-avatar-wrap {
+            position: relative;
+            width: var(--fc-avatar-overlay);
+            height: var(--fc-avatar-overlay);
+            margin: 6px 0;
+        }
+        .kt-avatar {
+            width: 100%; height: 100%;
+            border-radius: 2px;
+            border: 1px solid rgba(197,160,89,0.55);
+            overflow: hidden;
+            background: #0a0608;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 0 6px rgba(0,0,0,0.45), 0 12px 28px rgba(0,0,0,0.4);
+            clip-path: polygon(8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%, 0 8%);
+        }
+        .kt-avatar img { width: 100%; height: 100%; object-fit: cover; filter: contrast(1.08) saturate(0.9); }
+        .kt-avatar .initials {
+            font-size: 2.8rem; font-weight: 900; color: var(--gold-glow);
+        }
+        .killer-takeover.mode-death .kt-avatar {
+            filter: grayscale(1) brightness(0.7);
+            border-color: rgba(190,50,70,0.7);
+        }
+        .killer-takeover.mode-lost .kt-avatar { filter: grayscale(0.8) brightness(0.75); }
+        .killer-takeover.mode-boost .kt-avatar { border-color: rgba(90,190,130,0.6); }
+        .killer-takeover.mode-knock .kt-avatar { border-color: rgba(190,50,70,0.65); }
+
+        .kt-delta {
+            position: absolute;
+            right: -14px; bottom: -8px;
+            min-width: 54px; height: 42px;
+            padding: 0 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; font-weight: 900;
+            letter-spacing: 1px;
+            color: #0c1a12;
+            background: #9af0c0;
+            border: 1px solid #1a3d2a;
+            border-radius: 0;
+            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            z-index: 2;
+        }
+        .killer-takeover.mode-knock .kt-delta {
+            color: #2a060a;
+            background: #ff6b7a;
+            border-color: #5a1018;
+        }
+
+        .kt-stamp {
+            position: absolute; inset: -10px;
+            border: 1px dashed rgba(197,160,89,0.45);
+            clip-path: polygon(8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%, 0 8%);
+            animation: killerSpin 14s linear infinite;
+            pointer-events: none;
+        }
+        .killer-takeover.mode-death .kt-stamp {
+            border-color: rgba(190,50,70,0.5);
+            animation: none;
+        }
+        .killer-takeover.mode-boost .kt-stamp { border-color: rgba(90,190,130,0.45); }
+        .killer-takeover.mode-knock .kt-stamp { border-color: rgba(190,50,70,0.45); animation: none; }
+
+        .kt-x {
+            position: absolute; inset: -4px;
+            display: none; pointer-events: none; z-index: 3;
+        }
+        .killer-takeover.mode-death .kt-x { display: block; }
+        .kt-x::before, .kt-x::after {
+            content: '';
+            position: absolute; left: 50%; top: 50%;
+            width: 120%; height: 3px;
+            background: rgba(220, 50, 65, 0.9);
+            box-shadow: 0 0 12px rgba(200,40,60,0.6);
+        }
+        .kt-x::before { transform: translate(-50%, -50%) rotate(45deg); }
+        .kt-x::after { transform: translate(-50%, -50%) rotate(-45deg); }
+
+        .kt-name {
+            margin: 0;
+            font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #f5ede0;
+            line-height: 1.05;
+        }
+        .killer-takeover.mode-death .kt-name { color: #ff8a95; }
+        .killer-takeover.mode-lost .kt-name { color: #ccc; }
+
+        .kt-quip {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold-glow);
+            background: transparent;
+            border: none;
+            border-top: 1px solid rgba(197,160,89,0.3);
+            border-bottom: 1px solid rgba(197,160,89,0.3);
+            border-radius: 0;
+            padding: 10px 4px;
+            box-shadow: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .killer-takeover.mode-boost .kt-quip { color: #9af0c0; border-color: rgba(90,190,130,0.35); }
+        .killer-takeover.mode-knock .kt-quip,
+        .killer-takeover.mode-death .kt-quip { color: #ff8a95; border-color: rgba(190,50,70,0.4); }
+        .killer-takeover.mode-lost .kt-quip { color: #bbb; border-color: rgba(140,140,140,0.35); }
+
+        .kt-sub {
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: rgba(245,237,224,0.55);
+        }
+
+        .killer-shards {
+            position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden;
+        }
+        .killer-shard {
+            position: absolute; bottom: -20px;
+            width: 8px; height: 8px;
+            background: var(--gold);
+            opacity: 0;
+            clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+        }
+        .match-winner-takeover.active .killer-shard {
+            animation: killerShardRise var(--dur, 3s) linear var(--delay, 0s) infinite;
+        }
+
+        @keyframes killerFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes killerCardIn {
+            to { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes killerRingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.65; }
+            50% { transform: scale(1.03); opacity: 1; }
+        }
+        @keyframes killerSpin { to { transform: rotate(360deg); } }
+        @keyframes killerSlashIn {
+            0% { opacity: 0; transform: translateX(-8%) scaleX(0.6); }
+            100% { opacity: 1; transform: translateX(0) scaleX(1); }
+        }
+        @keyframes killerShardRise {
+            0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+            15% { opacity: 0.85; }
+            100% { opacity: 0; transform: translateY(-110vh) rotate(220deg); }
+        }
+
+    
+        /* --- HELP OVERLAY --- */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(40, 12, 24, 0.95);
+            border: 2px solid #c5a059;
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: #f5e3b5; margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 0.95rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+
+        /* ===== ROUND ANNOUNCE — classified contract dossier ===== */
+        .round-announce-takeover {
+            position: fixed; inset: 0; z-index: 550;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at 50% 35%, #1a0c10 0%, #060204 70%);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .round-announce-takeover.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .ra-dossier {
+            position: relative;
+            width: min(720px, 88vw);
+            padding: 42px 48px 36px;
+            background:
+                linear-gradient(165deg, rgba(28,18,14,0.96) 0%, rgba(12,8,8,0.98) 100%);
+            border: 1px solid rgba(197,160,89,0.45);
+            box-shadow:
+                0 0 0 1px rgba(0,0,0,0.6),
+                0 28px 80px rgba(0,0,0,0.65),
+                inset 0 0 60px rgba(197,160,89,0.04);
+            transform: scale(0.92) rotate(-0.6deg);
+            opacity: 0;
+        }
+        .round-announce-takeover.active .ra-dossier {
+            animation: raDossierIn 0.55s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+        }
+        @keyframes raDossierIn {
+            to { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        .ra-redact {
+            position: absolute; left: 10%; right: 18%; height: 10px;
+            background: #111; opacity: 0.55;
+        }
+        .ra-redact.r1 { top: 18%; animation: raRedact 0.4s 0.15s both; }
+        .ra-redact.r2 { top: 24%; width: 40%; right: auto; animation: raRedact 0.4s 0.28s both; }
+        @keyframes raRedact {
+            from { transform: scaleX(0); transform-origin: left; }
+            to { transform: scaleX(1); }
+        }
+        .ra-stamp {
+            position: absolute; top: 28px; right: 32px;
+            width: 110px; height: 110px; border-radius: 50%;
+            border: 3px solid rgba(180,40,50,0.75);
+            color: rgba(200,50,60,0.85);
+            font-size: 0.72rem; font-weight: 900; letter-spacing: 2px;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+            transform: rotate(18deg) scale(1.4);
+            opacity: 0;
+        }
+        .round-announce-takeover.active .ra-stamp {
+            animation: raStamp 0.45s cubic-bezier(0.2, 1.2, 0.3, 1) 0.35s forwards;
+        }
+        @keyframes raStamp {
+            to { opacity: 1; transform: rotate(12deg) scale(1); }
+        }
+        .ra-file {
+            font-size: 0.75rem; letter-spacing: 4px; color: rgba(197,160,89,0.7);
+            font-weight: 700; margin-bottom: 10px;
+        }
+        .ra-eyebrow {
+            font-size: 0.95rem; letter-spacing: 6px; color: #c5a059;
+            font-weight: 800; margin-bottom: 8px;
+        }
+        .ra-title-row {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.35em 0.55em;
+            margin: 0 0 18px;
+        }
+        .ra-title {
+            font-size: clamp(3.2rem, 7vw, 5.2rem); font-weight: 900;
+            color: #f3e6c8; letter-spacing: 4px; line-height: 0.95;
+            margin: 0; text-shadow: 0 0 40px rgba(197,160,89,0.25);
+        }
+        .ra-of {
+            font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+            color: rgba(243,230,200,0.55);
+            letter-spacing: 3px;
+            font-weight: 800;
+            margin: 0;
+            white-space: nowrap;
+        }
+        .ra-tags {
+            display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
+        }
+        .ra-tag {
+            padding: 8px 14px; border: 1px solid rgba(197,160,89,0.4);
+            color: #e8c97a; font-size: 0.85rem; font-weight: 800; letter-spacing: 2px;
+            background: rgba(197,160,89,0.08);
+        }
+        .ra-tag.hot {
+            border-color: rgba(220,60,70,0.55); color: #ff8a95;
+            background: rgba(160,30,40,0.2);
+            animation: raPulse 1.1s ease-in-out infinite;
+        }
+        @keyframes raPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(200,40,50,0.35); }
+            50% { box-shadow: 0 0 18px 2px rgba(200,40,50,0.25); }
+        }
+        .ra-sub {
+            margin-top: 16px; font-size: 1rem; color: rgba(220,200,160,0.7);
+            letter-spacing: 1px;
+        }
+        .round-announce-takeover.mode-final .ra-dossier {
+            border-color: rgba(220,60,70,0.55);
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 28px 80px rgba(80,0,10,0.55),
+                inset 0 0 80px rgba(180,30,40,0.08);
+        }
+
+
+        .match-winner-takeover.mode-draw .kt-card::after { content: 'STANDOFF'; color: rgba(197,160,89,0.55); }
+        .match-winner-takeover.mode-draw .kt-badge {
+            font-size: 1.6rem;
+        }
+        .kt-avatar.draw-row {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+            width: auto;
+            max-width: 100%;
+            height: auto;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+        }
+        .kt-avatar.draw-row .kt-avatar-item {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid var(--gold);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+        }
+        .kt-avatar.draw-row .kt-avatar-item img,
+        .kt-avatar.draw-row .kt-avatar-item .initials {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="master-frame">
+        <div class="window-game-title">Killer</div>
+    </div>
+
+    <div class="killer-takeover" id="killerTakeover" style="--fd-winner-video-border: #c5a059;">
+        <div class="kt-vignette" aria-hidden="true"></div>
+        <div class="kt-slash" aria-hidden="true"></div>
+        <div class="kt-crosshair" aria-hidden="true"></div>
+        <div class="kt-rings" aria-hidden="true"></div>
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="kt-card">
+                    <div class="kt-eyebrow" id="ktEyebrow">Contract Update</div>
+                    <div class="kt-badge" id="ktBadge">DOUBLE!</div>
+                    <div class="kt-avatar-wrap">
+                        <div class="kt-stamp" aria-hidden="true"></div>
+                        <div class="kt-x" aria-hidden="true"></div>
+                        <div class="kt-avatar" id="ktAvatarSlot"></div>
+                        <div class="kt-delta" id="ktDelta">+2</div>
+                    </div>
+                    <h1 class="kt-name" id="ktName">PLAYER</h1>
+                    <p class="kt-quip" id="ktQuip">Marked Cold!</p>
+                    <div class="kt-sub" id="ktSub">Number 20</div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="becameKillerVideo" class="fd-event-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+    </div>
+
+    <div class="match-winner-takeover" id="matchWinnerScreen" style="--fd-winner-video-border: #c5a059;">
+        <div class="kt-vignette" aria-hidden="true"></div>
+        <div class="kt-crosshair" aria-hidden="true"></div>
+        <div class="kt-rings" aria-hidden="true"></div>
+        <div class="killer-shards" id="winnerShards" aria-hidden="true"></div>
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="kt-card">
+                    <div class="kt-eyebrow" id="winnerEyebrow">Last Contract Closed</div>
+                    <div class="kt-badge" id="winnerBadge">TOP KILLER!</div>
+                    <div class="kt-avatar-wrap">
+                        <div class="kt-stamp" aria-hidden="true"></div>
+                        <div class="kt-avatar" id="winnerAvatarSlot"></div>
+                    </div>
+                    <h1 class="kt-name" id="winnerNameText">CHAMPION</h1>
+                    <p class="kt-quip" id="winnerQuip">Last One Standing</p>
+                    <div class="kt-sub" id="winnerSub">Winner's Circle</div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="round-announce-takeover" id="roundAnnounceScreen" aria-hidden="true">
+        <div class="ra-dossier">
+            <div class="ra-redact r1" aria-hidden="true"></div>
+            <div class="ra-redact r2" aria-hidden="true"></div>
+            <div class="ra-stamp" id="raStamp">CLASSIFIED</div>
+            <div class="ra-file" id="raFile">FILE // CONTRACT SERIES</div>
+            <div class="ra-eyebrow" id="raEyebrow">CONTRACT ROUND</div>
+            <div class="ra-title-row">
+                <h1 class="ra-title" id="raTitle">ROUND 1</h1>
+                <div class="ra-of" id="raOf">OF 12</div>
+            </div>
+            <div class="ra-tags" id="raTags"></div>
+            <div class="ra-sub" id="raSub"></div>
+        </div>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Killer Rules</h3>
+        <p>• Each player is assigned a unique target number.</p>
+        <p>• Hit your number to fill marks — doubles/triples count extra. Reach 3 marks to become a Killer.</p>
+        <p>• As a Killer, hit other players’ numbers to strip their marks/lives.</p>
+        <p>• Empty a civilian or drop a Killer below 3 marks to revoke their status.</p>
+        <p>• Overkill can eliminate a player outright.</p>
+        <p>• Rounds 1–6 are normal; 7–9 are ×2; 10–12 are ×3. Last player standing wins. If several survive round 12: sole Killer wins; multiple Killers share the win; if nobody is Killer, most wedges wins (ties share).</p>
+    </div>
+
+    <div class="arena">
+        <div class="board-stage">
+            <div class="board-wrap">
+                <svg class="dartboard-svg" id="dartboardSvg" viewBox="0 0 220 220"></svg>
+                <div class="board-labels" id="boardLabels"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounds-tracker" id="roundsTracker"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // ?layoutTest=all renders all 20 wheel positions at once with mock players,
+            // for visually auditing avatar placement without needing a live game.
+            const IS_LAYOUT_TEST = new URLSearchParams(window.location.search).get('layoutTest') === 'all';
+
+            const DARTBOARD_WHEEL = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+            const SEGMENTS_PER_NUMBER = 3;
+            const PLAYER_COLORS = window.FC_PLAYER_COLORS;
+            const CX = 110;
+            const CY = 110;
+            const INNER_R = 2;
+            const OUTER_R = 96;
+            const SEGMENT_OUTER_R = 94.5;
+            const RADIAL_GAP = 1.2;
+            let lastBoardKey = null;
+            let lastPhaseKey = null;
+            let pendingOverlayTimer = null;
+
+            function renderAvatarHtml(avatar, name, className) {
+                if (avatar) {
+                    return `<img src="${avatar}">`;
+                }
+                const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                return `<div class="${className}">${initials}</div>`;
+            }
+
+            function hexToRgb(hex) {
+                const n = parseInt(hex.slice(1), 16);
+                return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+            }
+
+            function colorAlpha(hex, alpha) {
+                const { r, g, b } = hexToRgb(hex);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+
+            function polar(cx, cy, r, angleDeg) {
+                const rad = (angleDeg * Math.PI) / 180;
+                return {
+                    x: cx + (r * Math.sin(rad)),
+                    y: cy - (r * Math.cos(rad))
+                };
+            }
+
+            function segmentPath(cx, cy, innerR, outerR, startDeg, endDeg) {
+                const startOuter = polar(cx, cy, outerR, startDeg);
+                const endOuter = polar(cx, cy, outerR, endDeg);
+                const startInner = polar(cx, cy, innerR, endDeg);
+                const endInner = polar(cx, cy, innerR, startDeg);
+                const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+                return [
+                    `M ${startOuter.x} ${startOuter.y}`,
+                    `A ${outerR} ${outerR} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}`,
+                    `L ${startInner.x} ${startInner.y}`,
+                    `A ${innerR} ${innerR} 0 ${largeArc} 0 ${endInner.x} ${endInner.y}`,
+                    'Z'
+                ].join(' ');
+            }
+
+            function wedgeAnglesForNumber(num) {
+                const idx = DARTBOARD_WHEEL.indexOf(num);
+                if (idx < 0) return null;
+                const slice = 360 / DARTBOARD_WHEEL.length;
+                const start = idx * slice - slice / 2;
+                const end = start + slice;
+                const mid = start + slice / 2;
+                return { start, end, mid, slice };
+            }
+
+            function boardKey(gd) {
+                return gd.players.map(p => `${p.id}:${p.targetNumber}:${p.lives}:${p.killerMarks}:${p.isKiller}`).join('|');
+            }
+
+            function segmentStatesForPlayer(player) {
+                const states = ['empty', 'empty', 'empty'];
+                if (player.lives < 0) {
+                    return ['dead', 'dead', 'dead'];
+                }
+
+                if (player.isKiller) {
+                    for (let i = 0; i < SEGMENTS_PER_NUMBER; i++) {
+                        states[i] = i < Math.max(0, player.lives) ? 'filled-killer' : 'empty';
+                    }
+                    return states;
+                }
+
+                for (let i = 0; i < player.killerMarks && i < SEGMENTS_PER_NUMBER; i++) {
+                    states[i] = 'filled-mark';
+                }
+                return states;
+            }
+
+            function segmentFill(state, playerColor) {
+                if (state === 'filled-mark' || state === 'filled-killer') {
+                    return playerColor;
+                }
+                if (state === 'dead') {
+                    return colorAlpha(playerColor, 0.1);
+                }
+                return colorAlpha(playerColor, 0.01);
+            }
+
+            function wedgeUnderlayFill(playerColor) {
+                return colorAlpha(playerColor, 0.22);
+            }
+
+            function lastHitSegmentIndex(gd, player) {
+                const last = gd.lastThrow;
+                if (!last || last.hitNumber !== player.targetNumber) return -1;
+
+                if (last.effect === 'mark') {
+                    return Math.min(player.killerMarks - 1, SEGMENTS_PER_NUMBER - 1);
+                }
+
+                if (last.effect === 'strike' && last.victimId === player.id) {
+                    return typeof last.strikeSegment === 'number'
+                        ? last.strikeSegment
+                        : 0;
+                }
+
+                return -1;
+            }
+
+            function markSegmentsForPlayer(gd, player) {
+                const last = gd.lastThrow;
+                if (!last || last.effect !== 'mark') return [];
+                if (last.hitNumber !== player.targetNumber) return [];
+                if (Array.isArray(last.markSegments) && last.markSegments.length) {
+                    return last.markSegments;
+                }
+                const idx = Math.min(player.killerMarks - 1, SEGMENTS_PER_NUMBER - 1);
+                return idx >= 0 ? [idx] : [];
+            }
+
+            function strikeSegmentsForPlayer(gd, player) {
+                const last = gd.lastThrow;
+                if (!last || last.effect !== 'strike' || last.victimId !== player.id) return [];
+                if (Array.isArray(last.strikeSegments) && last.strikeSegments.length) {
+                    return last.strikeSegments;
+                }
+                if (typeof last.strikeSegment === 'number') return [last.strikeSegment];
+                return [];
+            }
+
+            function runSequentialWedgeAnims(steps) {
+                let i = 0;
+                function next() {
+                    if (i >= steps.length) return;
+                    const step = steps[i++];
+                    if (step.before) step.before();
+                    // Restart animation cleanly
+                    step.path.classList.remove(step.className);
+                    void step.path.getBoundingClientRect();
+                    step.path.classList.add(step.className);
+                    step.path.addEventListener('animationend', () => {
+                        step.path.classList.remove(step.className);
+                        if (step.after) step.after();
+                        next();
+                    }, { once: true });
+                }
+                next();
+            }
+
+            function buildBoard(gd) {
+                const svg = document.getElementById('dartboardSvg');
+                svg.innerHTML = '';
+
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+                clip.setAttribute('id', 'boardClip');
+                const clipCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                clipCircle.setAttribute('cx', CX);
+                clipCircle.setAttribute('cy', CY);
+                clipCircle.setAttribute('r', OUTER_R);
+                clip.appendChild(clipCircle);
+                defs.appendChild(clip);
+                svg.appendChild(defs);
+
+                const boardGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                boardGroup.setAttribute('clip-path', 'url(#boardClip)');
+
+                const boardBase = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                boardBase.setAttribute('cx', CX);
+                boardBase.setAttribute('cy', CY);
+                boardBase.setAttribute('r', OUTER_R);
+                boardBase.setAttribute('class', 'board-base');
+                boardGroup.appendChild(boardBase);
+
+                const assignedNumbers = new Set(gd.players.map(p => p.targetNumber));
+                const unassignedGrey = '#9a98a6';
+
+                const depth = SEGMENT_OUTER_R - INNER_R;
+                const band = (depth - RADIAL_GAP * (SEGMENTS_PER_NUMBER - 1)) / SEGMENTS_PER_NUMBER;
+                const slice = 360 / DARTBOARD_WHEEL.length;
+
+                DARTBOARD_WHEEL.forEach((num, idx) => {
+                    if (assignedNumbers.has(num)) return;
+
+                    const start = idx * slice - slice / 2;
+                    const end = start + slice;
+
+                    for (let s = 0; s < SEGMENTS_PER_NUMBER; s++) {
+                        const rInner = INNER_R + s * (band + RADIAL_GAP);
+                        const rOuter = Math.min(rInner + band, SEGMENT_OUTER_R);
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('d', segmentPath(CX, CY, rInner, rOuter, start, end));
+                        path.setAttribute('class', 'board-sub-segment board-unassigned-segment');
+                        path.setAttribute('fill', colorAlpha(unassignedGrey, 0.22));
+                        path.setAttribute('data-number', String(num));
+                        path.setAttribute('data-segment', String(s));
+                        boardGroup.appendChild(path);
+                    }
+                });
+
+                const markAnimSteps = [];
+                const strikeAnimSteps = [];
+
+                gd.players.forEach((player, idx) => {
+                    const angles = wedgeAnglesForNumber(player.targetNumber);
+                    if (!angles) return;
+
+                    const playerColor = PLAYER_COLORS[idx % PLAYER_COLORS.length];
+                    const eliminated = player.lives < 0;
+                    const displayColor = eliminated ? unassignedGrey : playerColor;
+                    const states = segmentStatesForPlayer(player);
+                    const markSegs = markSegmentsForPlayer(gd, player);
+                    const strikeSegs = strikeSegmentsForPlayer(gd, player);
+
+                    const isActiveTurn = !eliminated && idx === gd.activeIdx;
+                    const underlay = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    underlay.setAttribute('d', segmentPath(CX, CY, INNER_R, SEGMENT_OUTER_R, angles.start, angles.end));
+                    underlay.setAttribute(
+                        'class',
+                        `board-wedge-underlay${isActiveTurn ? ' active-turn' : ''}`
+                    );
+                    if (isActiveTurn) {
+                        underlay.style.setProperty('--wedge-pulse', playerColor);
+                    }
+                    underlay.setAttribute('fill', wedgeUnderlayFill(displayColor));
+                    underlay.setAttribute('stroke', colorAlpha(displayColor, eliminated ? 0.25 : 0.45));
+                    underlay.setAttribute('stroke-width', '1');
+                    boardGroup.appendChild(underlay);
+
+                    for (let s = 0; s < SEGMENTS_PER_NUMBER; s++) {
+                        const rInner = INNER_R + s * (band + RADIAL_GAP);
+                        const rOuter = Math.min(rInner + band, SEGMENT_OUTER_R);
+                        const isFilled = states[s] === 'filled-mark' || states[s] === 'filled-killer';
+                        const markFlashIdx = markSegs.indexOf(s);
+                        const strikeFlashIdx = strikeSegs.indexOf(s);
+                        const isMarkFlash = markFlashIdx >= 0;
+                        const isStrikeFlash = strikeFlashIdx >= 0;
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        path.setAttribute('d', segmentPath(CX, CY, rInner, rOuter, angles.start, angles.end));
+                        path.setAttribute('class', 'board-sub-segment board-player-segment');
+
+                        if (isStrikeFlash) {
+                            // Start filled; flash one-by-one, then settle empty
+                            path.setAttribute('fill', playerColor);
+                            path.setAttribute('stroke', 'none');
+                            strikeAnimSteps[strikeFlashIdx] = {
+                                path,
+                                className: 'strike-flash',
+                                after: () => {
+                                    path.setAttribute('fill', segmentFill(states[s], displayColor));
+                                    path.setAttribute('stroke', colorAlpha(displayColor, 0.4));
+                                }
+                            };
+                        } else if (isMarkFlash) {
+                            // Start empty; fill one-by-one with blink, then settle solid
+                            path.setAttribute('fill', segmentFill('empty', displayColor));
+                            path.setAttribute('stroke', colorAlpha(displayColor, 0.4));
+                            markAnimSteps[markFlashIdx] = {
+                                path,
+                                className: 'mark-flash',
+                                before: () => {
+                                    path.setAttribute('fill', playerColor);
+                                    path.setAttribute('stroke', 'none');
+                                },
+                                after: () => {
+                                    path.setAttribute('fill', playerColor);
+                                    path.setAttribute('stroke', 'none');
+                                }
+                            };
+                        } else {
+                            path.setAttribute('fill', segmentFill(states[s], displayColor));
+                            path.setAttribute('stroke', isFilled ? 'none' : colorAlpha(displayColor, 0.4));
+                        }
+
+                        path.setAttribute('data-number', String(player.targetNumber));
+                        path.setAttribute('data-segment', String(s));
+                        boardGroup.appendChild(path);
+                    }
+                });
+
+                svg.appendChild(boardGroup);
+
+                const outerRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                outerRing.setAttribute('cx', CX);
+                outerRing.setAttribute('cy', CY);
+                outerRing.setAttribute('r', OUTER_R);
+                outerRing.setAttribute('class', 'board-disc');
+                svg.appendChild(outerRing);
+
+                const markSteps = markAnimSteps.filter(Boolean);
+                const strikeSteps = strikeAnimSteps.filter(Boolean);
+                if (markSteps.length) runSequentialWedgeAnims(markSteps);
+                if (strikeSteps.length) runSequentialWedgeAnims(strikeSteps);
+            }
+
+            function outerLabelRadius(placement) {
+                const boardWrap = document.querySelector('.board-wrap');
+                const scale = boardWrap ? 220 / boardWrap.getBoundingClientRect().width : 1;
+                const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+                const fontHalfPx = (2.0 * rootFontPx) / 2;
+                const borderOuter = OUTER_R + 1.25;
+                const bufferViewBox = 5 * scale;
+                const fontHalfViewBox = fontHalfPx * scale;
+                let labelR = borderOuter + bufferViewBox + fontHalfViewBox;
+                if (placement === 'left' || placement === 'right') {
+                    labelR += 6 * scale;
+                }
+                return labelR;
+            }
+
+            const AVATAR_SIZE = (window.FC_AVATAR_INPLAY || 90);
+            const BADGE_FRAME = AVATAR_SIZE + 18; // matches shared .fc-player-badge frame
+            const VERTICAL_CENTER_THRESHOLD = 12;
+
+            function profilePlacement(anchorPos) {
+                // Top/bottom numbers (e.g. 20, 3) go left/right instead of stacking the
+                // avatar above/below the number — that stack pushed into the frame border
+                // once avatars got bigger; left/right has plenty of clear horizontal room.
+                const nearVerticalCenter = Math.abs(anchorPos.x - CX) < VERTICAL_CENTER_THRESHOLD;
+                if (nearVerticalCenter && anchorPos.y < CY) return 'right';
+                if (nearVerticalCenter && anchorPos.y > CY) return 'left';
+                if (anchorPos.x < CX - 1) return 'left';
+                return 'right';
+            }
+
+            // Uniform gap (real px, center-of-number to center-of-avatar) for the new pure
+            // radial placement rule: avatar sits directly on the same ray as its own
+            // number, straight outward from the board center. Confirmed against real
+            // examples: at wheel angle 90 the avatar's own number sits at exactly 9
+            // o'clock of the avatar; at 270 exactly 3 o'clock -- both fall out of this
+            // rule automatically, for every wheel position, not just those two.
+            const RADIAL_PLACEMENT_GAP = 100;
+
+            // Half the avatar's own visible footprint, so the clamp below stops the
+            // avatar's near EDGE at the frame, not its center.
+            const RADIAL_CLAMP_MARGIN = (BADGE_FRAME / 2) + 12;
+
+            // The near-vertical triad on each side of the board (5/20/1 top, 19/3/17
+            // bottom): pure radial bunches these together since their individual rays
+            // converge too tightly close to straight up/down. Leveled to a shared depth
+            // per side instead, spread apart horizontally -- confirmed twice against real
+            // dragged reference positions. Overlap with NEIGHBORING numbers just outside
+            // these triads (12/18, 7/2) is fine to leave as-is: with a max of 6 players,
+            // spread via the degree-spacing algorithm, two genuinely adjacent wheel slots
+            // (e.g. 20 and 1, or 1 and 18) never both end up as live targets in the same
+            // real game -- layoutTest=all shows all 20 at once, which is a stress test
+            // that can't actually occur in play.
+            // Top triad rule (matched to hand-dragged reference positions): all three
+            // level at the ink-clamped row height, each tucked BESIDE its own number
+            // label (label half-width + avatar half-width + pad), opening away from the
+            // board's centerline; 20 sits dead center so it defaults right.
+            const TOP_TRIAD = [5, 20, 1];
+            const TRIAD_BESIDE_PAD = 8;
+            const BOTTOM_TRIAD = [19, 3, 17];  // wheel order, left to right
+
+            function triadGap(numRect, dirY) {
+                // Ray-cast straight up/down from the NUMBER's own real position (not the
+                // board center -- the transform this feeds is already relative to the
+                // number's anchor, so counting from center would double up the board's
+                // own radius) to the frame edge.
+                const frameRect = document.querySelector('.master-frame').getBoundingClientRect();
+                const originY = numRect.top + numRect.height / 2;
+                const maxT = dirY < 0
+                    ? originY - (frameRect.top + RADIAL_CLAMP_MARGIN)
+                    : (frameRect.bottom - RADIAL_CLAMP_MARGIN) - originY;
+                return Math.max(0, Math.min(RADIAL_PLACEMENT_GAP, maxT));
+            }
+
+            // Second pass, after all edge-player nodes exist: place each triad as ONE row
+            // centered on the board's center X at ONE shared depth. Per-member placement
+            // (dx off each number's own anchor) double-spread them — 5's avatar landed on
+            // 12's, 1's on 18's — because the three anchors are already spread apart.
+            function levelTriadRows() {
+                const boardWrap = document.querySelector('.board-wrap');
+                if (!boardWrap) return;
+                const boardRect = boardWrap.getBoundingClientRect();
+                const centerX = boardRect.left + boardRect.width / 2;
+                // Third element: which side the CENTER number's avatar opens to
+                // (20 → right of its label, 3 → left of its label)
+                [[TOP_TRIAD, -1, 1], [BOTTOM_TRIAD, 1, -1]].forEach(([triad, dirY, centerSign]) => {
+                    const entries = triad.map(n => {
+                        const numEl = Array.from(document.querySelectorAll('#boardLabels .edge-number'))
+                            .find(el => el.textContent === String(n));
+                        if (!numEl) return null;
+                        const profile = numEl.closest('.edge-player').querySelector('.edge-profile');
+                        return { n, numEl, profile };
+                    }).filter(Boolean);
+                    if (!entries.length) return;
+                    // Shared row depth: ray-cast from the middle number (20 / 3) only
+                    const ref = entries.find(e => e.n === triad[1]) || entries[0];
+                    const refRect = ref.numEl.getBoundingClientRect();
+                    const rowY = (refRect.top + refRect.height / 2) + dirY * triadGap(refRect, dirY);
+                    entries.forEach(e => {
+                        const order = triad.indexOf(e.n);
+                        const rect = e.numEl.getBoundingClientRect();
+                        e.ox = rect.left + rect.width / 2;
+                        e.oy = rect.top + rect.height / 2;
+                        const isCenter = order === (triad.length - 1) / 2;
+                        const sign = isCenter ? centerSign : (e.ox < centerX ? -1 : 1);
+                        // Outer members (5/1, 19/17) tuck 15px tighter to their numbers
+                        // than the center ones (20/3)
+                        const pad = isCenter ? TRIAD_BESIDE_PAD : TRIAD_BESIDE_PAD - 15;
+                        const targetX = e.ox + sign * (rect.width / 2 + BADGE_FRAME / 2 + pad);
+                        // Hand-tuned: 20's avatar rides 11px higher than the shared row.
+                        // Applied after the ink clamp so it can't push the row back down.
+                        e.nudgeY = (isCenter && dirY < 0) ? -11 : 0;
+                        e.dx = targetX - e.ox;
+                        e.dy = rowY - e.oy;
+                        e.profile.style.transform = `translate(calc(-50% + ${e.dx}px), calc(-50% + ${e.dy}px))`;
+                    });
+                    // The profile's layout box is asymmetric (dead space above the circle,
+                    // name chip flush at the bottom) and the frame's dotted line sits ~10px
+                    // INSIDE the frame rect — so clamp against actually rendered ink, not
+                    // the box: union the descendants' rects and shift the whole row until
+                    // the ink clears the dotted line by INK_FRAME_MARGIN.
+                    const frameRect = document.querySelector('.master-frame').getBoundingClientRect();
+                    const DOTTED_INSET = 10, INK_FRAME_MARGIN = 12;
+                    let inkTop = Infinity, inkBottom = -Infinity;
+                    entries.forEach(e => {
+                        e.profile.querySelectorAll('*').forEach(el => {
+                            const r = el.getBoundingClientRect();
+                            if (!r.height) return;
+                            inkTop = Math.min(inkTop, r.top);
+                            inkBottom = Math.max(inkBottom, r.bottom);
+                        });
+                    });
+                    const limitTop = frameRect.top + DOTTED_INSET + INK_FRAME_MARGIN;
+                    const limitBottom = frameRect.bottom - DOTTED_INSET - INK_FRAME_MARGIN;
+                    let shift = 0;
+                    if (dirY < 0 && inkTop < limitTop) shift = limitTop - inkTop;
+                    if (dirY > 0 && inkBottom > limitBottom) shift = limitBottom - inkBottom;
+                    entries.forEach(e => {
+                        e.profile.style.transform = `translate(calc(-50% + ${e.dx}px), calc(-50% + ${e.dy + shift + (e.nudgeY || 0)}px))`;
+                    });
+                });
+            }
+
+            // Hand-tuned per-number offsets applied on top of the pure radial rule
+            const RADIAL_NUDGES = {
+                12: { x: -20, y: 5 },
+                18: { x: 20, y: 5 }
+            };
+
+            function positionEdgeProfileRadial(profile, numRect, anchorPos, targetNumber) {
+                const ux = (anchorPos.x - CX) / OUTER_R;
+                const uy = (anchorPos.y - CY) / OUTER_R;
+                const len = Math.sqrt(ux * ux + uy * uy) || 1;
+                const dirX = ux / len, dirY = uy / len;
+
+                // Real circle/rect geometry instead of hardcoding "these 6 numbers are
+                // special": ray-cast from the number's real on-screen position, in this
+                // direction, and find how far it can go before crossing the actual frame
+                // edge -- naturally comes out small only where it's genuinely tight (top
+                // and bottom, where the header/footer bars eat into vertical room), same
+                // full gap everywhere else, no hand-picked exceptions.
+                const frameRect = document.querySelector('.master-frame').getBoundingClientRect();
+                const originX = numRect.left + numRect.width / 2;
+                const originY = numRect.top + numRect.height / 2;
+                let maxT = Infinity;
+                if (dirX > 0) maxT = Math.min(maxT, (frameRect.right - RADIAL_CLAMP_MARGIN - originX) / dirX);
+                else if (dirX < 0) maxT = Math.min(maxT, (frameRect.left + RADIAL_CLAMP_MARGIN - originX) / dirX);
+                if (dirY > 0) maxT = Math.min(maxT, (frameRect.bottom - RADIAL_CLAMP_MARGIN - originY) / dirY);
+                else if (dirY < 0) maxT = Math.min(maxT, (frameRect.top + RADIAL_CLAMP_MARGIN - originY) / dirY);
+
+                const gap = Math.max(0, Math.min(RADIAL_PLACEMENT_GAP, maxT));
+                const nudge = RADIAL_NUDGES[targetNumber] || { x: 0, y: 0 };
+                const dx = dirX * gap + nudge.x;
+                const dy = dirY * gap + nudge.y;
+                profile.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            }
+
+            function positionEdgeProfile(profile, numRect, anchorPos, targetNumber) {
+                if (TOP_TRIAD.includes(targetNumber) || BOTTOM_TRIAD.includes(targetNumber)) {
+                    // Placed by levelTriadRows() once all nodes exist
+                    return;
+                }
+                positionEdgeProfileRadial(profile, numRect, anchorPos, targetNumber);
+            }
+
+            function renderEdgeLabels(gd) {
+                const labels = document.getElementById('boardLabels');
+                labels.innerHTML = '';
+
+                gd.players.forEach((player, idx) => {
+                    const angles = wedgeAnglesForNumber(player.targetNumber);
+                    if (!angles) return;
+
+                    const placement = profilePlacement(polar(CX, CY, OUTER_R + 20, angles.mid));
+                    const labelR = outerLabelRadius(placement);
+                    const anchorPos = polar(CX, CY, labelR, angles.mid);
+                    const pctX = (anchorPos.x / 220) * 100;
+                    const pctY = (anchorPos.y / 220) * 100;
+                    const playerColor = PLAYER_COLORS[idx % PLAYER_COLORS.length];
+                    const isActive = idx === gd.activeIdx;
+                    const profileClass = placement === 'above' || placement === 'below'
+                        ? 'edge-profile-vertical'
+                        : (placement === 'left' ? 'edge-profile-left' : 'edge-profile-right');
+                    const dartsOnLeft = placement === 'left' || placement === 'above';
+
+                    const node = document.createElement('div');
+                    node.className = `edge-player ${isActive ? 'active-turn' : ''} ${player.lives < 0 ? 'eliminated' : ''}`;
+                    node.style.left = `${pctX}%`;
+                    node.style.top = `${pctY}%`;
+
+                    const dartDots = `<div class="dart-dots${isActive ? '' : ' dart-dots-idle'}">
+                            <div class="dart-dot ${isActive && gd.throwsThisTurn > 0 ? 'thrown' : ''}"></div>
+                            <div class="dart-dot ${isActive && gd.throwsThisTurn > 1 ? 'thrown' : ''}"></div>
+                            <div class="dart-dot ${isActive && gd.throwsThisTurn > 2 ? 'thrown' : ''}"></div>
+                           </div>`;
+
+                    const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(player, gd) : [player];
+                    const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                    const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                        ? gd.throwerIndices[idx] : 0;
+                    // Keep singles avatar slot; grow partner outward by board side
+                    const duoGrow = placement === 'left' ? 'left'
+                        : (placement === 'right' ? 'right' : 'center');
+                    let duoMembers = members;
+                    let duoThrowerIdx = throwerIdx;
+                    if (isDuo && placement === 'left') {
+                        // Reverse so members[0] stays at the singles anchor (toward the number)
+                        duoMembers = members.slice().reverse();
+                        duoThrowerIdx = (members.length - 1) - (throwerIdx % members.length);
+                    }
+                    let badge;
+                    if (isDuo && window.FC_renderDoublesDuo) {
+                        // Darts outside the pair: left of left-side (and above), right of right-side (and below)
+                        if (dartsOnLeft) {
+                            const core = FC_renderDoublesDuo(duoMembers, {
+                                isActive, throwerIdx: duoThrowerIdx, colorIndex: idx
+                            });
+                            badge = core
+                                .replace('class="fc-duo-row is-duo"', 'class="fc-duo-row is-duo has-darts-left"')
+                                .replace(
+                                    '<div class="fc-duo-stack">',
+                                    `<div class="fc-duo-darts">${dartDots}</div><div class="fc-duo-stack">`
+                                );
+                        } else {
+                            badge = FC_renderDoublesDuo(duoMembers, {
+                                isActive, throwerIdx: duoThrowerIdx, colorIndex: idx, dartsHtml: dartDots
+                            });
+                        }
+                    } else {
+                        badge = FC_renderPlayerBadge(player.avatar, player.name, { colorIndex: idx, orbit: isActive });
+                    }
+                    const wrapClass = isDuo ? 'edge-avatar-wrap is-duo' : 'edge-avatar-wrap';
+                    const growAttr = isDuo ? ` data-duo-grow="${duoGrow}"` : '';
+
+                    let profileHtml;
+                    if (placement === 'above' || placement === 'below') {
+                        const floatSide = dartsOnLeft ? 'left' : 'right';
+                        // Duo carries its own outside darts; singles still use the float slot
+                        const floatDarts = isDuo ? '' : `<div class="edge-darts-float ${floatSide}">${dartDots}</div>`;
+                        profileHtml = `
+                            <div class="edge-identity edge-identity-stacked">
+                                <div class="${wrapClass}"${growAttr} style="--player-glow:${colorAlpha(playerColor, 0.7)};">
+                                    ${badge}
+                                    ${floatDarts}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const leftDartSlot = (!isDuo && dartsOnLeft) ? dartDots : '';
+                        const rightDartSlot = (!isDuo && !dartsOnLeft) ? dartDots : '';
+                        profileHtml = `
+                            <div class="edge-identity">
+                                <div class="edge-avatar-row">
+                                    <div class="edge-dart-slot">${leftDartSlot}</div>
+                                    <div class="${wrapClass}"${growAttr} style="--player-glow:${colorAlpha(playerColor, 0.7)};">
+                                        ${badge}
+                                    </div>
+                                    <div class="edge-dart-slot">${rightDartSlot}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    node.innerHTML = `
+                        <span class="edge-number" style="color:${playerColor};">${player.targetNumber}</span>
+                        <div class="edge-profile ${profileClass}">
+                            ${profileHtml}
+                        </div>
+                    `;
+                    labels.appendChild(node);
+
+                    const numEl = node.querySelector('.edge-number');
+                    const profile = node.querySelector('.edge-profile');
+                    positionEdgeProfile(profile, numEl.getBoundingClientRect(), anchorPos, player.targetNumber);
+                });
+                levelTriadRows();
+            }
+
+            function renderBoard(gd) {
+                const key = boardKey(gd) + `|${gd.activeIdx}|${gd.lastThrow ? gd.lastThrow.hitNumber + gd.lastThrow.effect : ''}`;
+                if (key !== lastBoardKey) {
+                    buildBoard(gd);
+                    lastBoardKey = key;
+                }
+                renderEdgeLabels(gd);
+            }
+
+            const ROUND_SECTIONS = [6, 3, 3];
+            const ROUND_DIVIDERS = ['2x', '3x'];
+            const TOTAL_ROUNDS = 12;
+
+            function renderRoundsTracker(gd) {
+                const tracker = document.getElementById('roundsTracker');
+                tracker.innerHTML = '';
+                const current = Math.min(Math.max(gd.currentRound || 1, 1), TOTAL_ROUNDS);
+                let roundIndex = 1;
+
+                const label = document.createElement('div');
+                label.className = 'rounds-label';
+                label.textContent = 'Round';
+                tracker.appendChild(label);
+
+                ROUND_SECTIONS.forEach((count, sectionIdx) => {
+                    const group = document.createElement('div');
+                    group.className = 'rounds-group';
+
+                    for (let i = 0; i < count; i++) {
+                        const dot = document.createElement('div');
+                        dot.className = 'rounds-dot';
+                        if (roundIndex < current) dot.classList.add('completed');
+                        else if (roundIndex === current) dot.classList.add('active');
+                        group.appendChild(dot);
+                        roundIndex++;
+                    }
+
+                    tracker.appendChild(group);
+
+                    if (sectionIdx < ROUND_DIVIDERS.length) {
+                        const divider = document.createElement('div');
+                        divider.className = 'rounds-divider';
+                        divider.innerHTML = `<span>${ROUND_DIVIDERS[sectionIdx]}</span>`;
+                        tracker.appendChild(divider);
+                    }
+                });
+            }
+
+            const WEDGE_ANIM_MS = 900;
+
+            function clearPendingOverlay() {
+                if (pendingOverlayTimer) {
+                    clearTimeout(pendingOverlayTimer);
+                    pendingOverlayTimer = null;
+                }
+            }
+
+            function overlayDelayAfterBoardAnim(gd) {
+                const last = gd.lastThrow;
+                if (!last) return 0;
+                let count = 0;
+                if (last.effect === 'mark' && Array.isArray(last.markSegments)) {
+                    count = last.markSegments.length;
+                } else if (last.effect === 'strike' && Array.isArray(last.strikeSegments)) {
+                    count = last.strikeSegments.length;
+                } else if (last.effect === 'mark' || last.effect === 'strike') {
+                    count = Math.max(1, last.multiplier || 1);
+                }
+                if (count <= 0) return 0;
+                // One full anim per segment, sequential
+                return (count * WEDGE_ANIM_MS) + 150;
+            }
+
+            function showPhaseAfterAnim(gd, showFn) {
+                clearPendingOverlay();
+                const delay = overlayDelayAfterBoardAnim(gd);
+                if (delay <= 0) {
+                    showFn();
+                    return;
+                }
+                pendingOverlayTimer = setTimeout(() => {
+                    pendingOverlayTimer = null;
+                    showFn();
+                }, delay);
+            }
+
+            function createWinnerShards() {
+                const bg = document.getElementById('winnerShards');
+                if (!bg) return;
+                bg.innerHTML = '';
+                for (let i = 0; i < 28; i++) {
+                    const shard = document.createElement('div');
+                    shard.className = 'killer-shard';
+                    shard.style.left = (Math.random() * 100) + 'vw';
+                    shard.style.setProperty('--delay', (Math.random() * 1.8).toFixed(2) + 's');
+                    shard.style.setProperty('--dur', (2.2 + Math.random() * 2.2).toFixed(2) + 's');
+                    shard.style.width = shard.style.height = (8 + Math.random() * 12) + 'px';
+                    shard.style.background = Math.random() > 0.4 ? 'var(--gold)' : 'var(--gold-glow)';
+                    bg.appendChild(shard);
+                }
+            }
+
+            function showKillerTakeover(mode, data) {
+                const screen = document.getElementById('killerTakeover');
+                const delta = document.getElementById('ktDelta');
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(screen);
+                screen.className = 'killer-takeover active mode-' + mode;
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.applyScreenClass(screen);
+                }
+
+                document.getElementById('ktEyebrow').innerText = data.eyebrow || '';
+                document.getElementById('ktBadge').innerText = data.badge || '';
+                document.getElementById('ktName').innerText = data.name || 'PLAYER';
+                document.getElementById('ktQuip').innerText = data.quip || '';
+                document.getElementById('ktSub').innerText = data.sub || '';
+                document.getElementById('ktAvatarSlot').innerHTML = renderAvatarHtml(
+                    data.avatar,
+                    data.name,
+                    'initials'
+                );
+
+                if (data.delta) {
+                    delta.style.display = 'flex';
+                    delta.innerText = data.delta;
+                } else {
+                    delta.style.display = 'none';
+                }
+
+                if (mode === 'became' && window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.playFixedIn(screen, '/assets/killer/became-charon.mp4');
+                } else if (mode === 'lost' && window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.playFixedIn(screen, '/assets/killer/lost-excommunicado.mp4');
+                } else if (mode === 'death' && window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.playFixedIn(screen, '/assets/killer/elim-skyfall-take-the-shot.mp4');
+                }
+            }
+
+            function renderPhaseOverlays(gd) {
+                document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+
+                const phase = gd.phase || { type: 'playing' };
+                const phaseKey = `${phase.type}-${phase.startedAt}`;
+                const killerScreen = document.getElementById('killerTakeover');
+                const winnerScreen = document.getElementById('matchWinnerScreen');
+
+                if (phaseKey === lastPhaseKey) return;
+                lastPhaseKey = phaseKey;
+
+                clearPendingOverlay();
+                killerScreen.className = 'killer-takeover';
+                const raScreen = document.getElementById('roundAnnounceScreen');
+                if (raScreen) {
+                    raScreen.className = 'round-announce-takeover';
+                    raScreen.setAttribute('aria-hidden', 'true');
+                }
+                winnerScreen.classList.remove('active', 'mode-draw');
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.stopIn(killerScreen);
+                    FlightDeckWinnerVideo.stopIn(winnerScreen);
+                }
+
+                if (phase.type === 'round_announce') {
+                    const d = phase.data || {};
+                    const screen = document.getElementById('roundAnnounceScreen');
+                    if (!screen) return;
+                    screen.className = 'round-announce-takeover active' + (d.isLast ? ' mode-final' : '');
+                    screen.setAttribute('aria-hidden', 'false');
+                    document.getElementById('raEyebrow').innerText = d.eyebrow || 'CONTRACT ROUND';
+                    document.getElementById('raTitle').innerText = d.title || ('ROUND ' + (d.round || 1));
+                    document.getElementById('raOf').innerText = d.maxRounds ? ('OF ' + d.maxRounds) : '';
+                    document.getElementById('raFile').innerText =
+                        'FILE // CONTRACT SERIES · R' + String(d.round || 1).padStart(2, '0');
+                    document.getElementById('raStamp').innerText =
+                        d.multiplier >= 3 ? '×3 CLEARANCE' : (d.multiplier >= 2 ? '×2 CLEARANCE' : 'CLASSIFIED');
+                    const tags = document.getElementById('raTags');
+                    const tagList = Array.isArray(d.tags) ? d.tags : [];
+                    tags.innerHTML = tagList.map(t => {
+                        const hot = /TRIPLE|DOUBLE|FINAL/i.test(t) ? ' hot' : '';
+                        return '<span class="ra-tag' + hot + '">' + t + '</span>';
+                    }).join('');
+                    document.getElementById('raSub').innerText = d.subtitle || '';
+                    return;
+                }
+
+                if (phase.type === 'became_killer') {
+                    showPhaseAfterAnim(gd, () => showKillerTakeover('became', {
+                        eyebrow: 'Clearance Granted',
+                        badge: 'KILLER',
+                        name: phase.data.playerName,
+                        avatar: phase.data.avatar,
+                        quip: 'License To Kill',
+                        sub: `Target Vector ${phase.data.targetNumber != null ? phase.data.targetNumber : '—'}`
+                    }));
+                    return;
+                }
+
+                if (phase.type === 'lost_killer') {
+                    showPhaseAfterAnim(gd, () => showKillerTakeover('lost', {
+                        eyebrow: 'Clearance Revoked',
+                        badge: 'STRIPPED',
+                        name: phase.data.playerName,
+                        avatar: phase.data.avatar,
+                        quip: 'Back To Civilian',
+                        sub: `Neutralized By ${phase.data.attackerName || 'RIVAL'}`
+                    }));
+                    return;
+                }
+
+                if (phase.type === 'death' || (phase.type === 'strike' && phase.data && phase.data.eliminated)) {
+                    showPhaseAfterAnim(gd, () => showKillerTakeover('death', {
+                        eyebrow: 'Target Down',
+                        badge: 'ELIMINATED',
+                        name: phase.data.victimName,
+                        avatar: phase.data.victimAvatar,
+                        quip: `Executed By ${phase.data.attackerName || 'RIVAL'}`,
+                        sub: phase.data.hitNumber != null ? `Vector ${phase.data.hitNumber}` : 'Removed From Play'
+                    }));
+                    return;
+                }
+
+                if (phase.type === 'mult_boost') {
+                    const mult = phase.data.multiplier === 3 ? 3 : 2;
+                    const steps = phase.data.steps != null ? phase.data.steps : mult;
+                    showPhaseAfterAnim(gd, () => showKillerTakeover('boost', {
+                        eyebrow: 'Mark Secured',
+                        badge: mult === 3 ? 'TRIPLE!' : 'DOUBLE!',
+                        name: phase.data.playerName,
+                        avatar: phase.data.avatar,
+                        quip: phase.data.quip || 'Marked Cold!',
+                        sub: `Number ${phase.data.targetNumber != null ? phase.data.targetNumber : '—'}`,
+                        delta: `+${steps}`
+                    }));
+                    return;
+                }
+
+                if (phase.type === 'mult_knock') {
+                    const mult = phase.data.multiplier === 3 ? 3 : 2;
+                    const steps = phase.data.steps != null ? phase.data.steps : mult;
+                    showPhaseAfterAnim(gd, () => showKillerTakeover('knock', {
+                        eyebrow: 'Damage Report',
+                        badge: mult === 3 ? 'TRIPLE!' : 'DOUBLE!',
+                        name: phase.data.playerName,
+                        avatar: phase.data.avatar,
+                        quip: phase.data.quip || 'Cut Deep!',
+                        sub: `Hit by ${phase.data.actorName || 'RIVAL'}`,
+                        delta: `−${steps}`
+                    }));
+                    return;
+                }
+
+                if (phase.type === 'intermission') {
+                    const name = (phase.data && phase.data.nextPlayerName) || 'PLAYER';
+                    const target = phase.data && phase.data.targetNumber;
+                    showKillerTakeover('next', {
+                        eyebrow: 'Next Contract',
+                        badge: 'UP NEXT',
+                        name,
+                        avatar: phase.data && phase.data.avatar,
+                        quip: 'Report To The Oche',
+                        sub: target != null ? `Vector ${target}` : 'Take Your Marks'
+                    });
+                    return;
+                }
+
+                if (phase.type === 'winner' || phase.type === 'draw') {
+                    const isDraw = phase.type === 'draw';
+                    const d = phase.data || {};
+                    const eyebrow = document.getElementById('winnerEyebrow');
+                    const badge = document.getElementById('winnerBadge');
+                    const quip = document.getElementById('winnerQuip');
+                    const sub = document.getElementById('winnerSub');
+                    const slot = document.getElementById('winnerAvatarSlot');
+
+                    if (isDraw) {
+                        const contenders = Array.isArray(d.contenders) ? d.contenders : [];
+                        const names = contenders.map(c => c.name).filter(Boolean);
+                        if (eyebrow) eyebrow.innerText = 'Contracts Unresolved';
+                        if (badge) badge.innerText = 'CO-WINNERS';
+                        document.getElementById('winnerNameText').innerText = names.join(' · ') || 'DRAW';
+                        if (quip) quip.innerText = d.reason === 'killers' ? 'Killers Still Standing' : 'Matched Wedges';
+                        if (sub) sub.innerText = 'Shared Clearance';
+                        slot.classList.remove('duo-wrap');
+                        slot.classList.add('draw-row');
+                        slot.innerHTML = contenders.map(c => {
+                            const members = Array.isArray(c.members) && c.members.length ? c.members : [c];
+                            if (members.length > 1) {
+                                return `<div class="kt-avatar-item">${members.map(m =>
+                                    renderAvatarHtml(m.avatar, m.name, 'initials')
+                                ).join('')}</div>`;
+                            }
+                            return `<div class="kt-avatar-item">${renderAvatarHtml(c.avatar, c.name, 'initials')}</div>`;
+                        }).join('');
+                    } else {
+                        if (eyebrow) eyebrow.innerText = 'Last Contract Closed';
+                        if (badge) badge.innerText = 'TOP KILLER!';
+                        document.getElementById('winnerNameText').innerText = d.winnerName || 'CHAMPION';
+                        if (quip) {
+                            quip.innerText = d.reason === 'sole_killer' ? 'Sole Clearance'
+                                : (d.reason === 'wedges' ? 'Most Wedges' : 'Last One Standing');
+                        }
+                        if (sub) sub.innerText = "Winner's Circle";
+                        slot.classList.remove('draw-row');
+                        const members = d.members;
+                        if (Array.isArray(members) && members.length > 1) {
+                            slot.classList.add('duo-wrap');
+                            slot.innerHTML = members.map(m =>
+                                `<div class="kt-avatar-item">${renderAvatarHtml(m.avatar, m.name, 'initials')}</div>`
+                            ).join('');
+                        } else {
+                            slot.classList.remove('duo-wrap');
+                            slot.innerHTML = renderAvatarHtml(d.avatar, d.winnerName, 'initials');
+                        }
+                    }
+
+                    createWinnerShards();
+                    showPhaseAfterAnim(gd, () => {
+                        winnerScreen.classList.add('active');
+                        winnerScreen.classList.toggle('mode-draw', isDraw);
+                        if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.playIn(winnerScreen);
+                    });
+                }
+            }
+
+            function applyGameData(gd) {
+                if (!gd || gd.gameType !== 'killer') return;
+                renderBoard(gd);
+                renderRoundsTracker(gd);
+                renderPhaseOverlays(gd);
+            }
+
+            window.addEventListener('message', (event) => {
+                const messageData = event.data;
+                if (!messageData || messageData.type !== 'SYNC_STATE') return;
+                const state = messageData.state;
+                if (!state || !state.gameData) return;
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.applyFromState(state);
+                    FlightDeckWinnerVideo.applyScreenClass(document.getElementById('matchWinnerScreen'));
+                    FlightDeckWinnerVideo.applyScreenClass(document.getElementById('killerTakeover'));
+                }
+                applyGameData(state.gameData);
+            });
+
+            if (IS_LAYOUT_TEST) {
+                const mockGameData = {
+                    gameType: 'killer',
+                    activeIdx: 0,
+                    throwsThisTurn: 1,
+                    currentRound: 1,
+                    phase: { type: 'playing' },
+                    lastThrow: null,
+                    players: DARTBOARD_WHEEL.map((num, i) => ({
+                        id: `layout-${i}`,
+                        name: String(num),
+                        avatar: null,
+                        targetNumber: num,
+                        lives: 3,
+                        killerMarks: 0,
+                        isKiller: false
+                    }))
+                };
+                applyGameData(mockGameData);
+            }
+        });
+    </script>
+</body>
+</html>

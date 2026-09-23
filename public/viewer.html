@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>🎪 RFC - Display Jumbotron</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #121214; color: #f0eedf; 
+            font-family: 'Georgia', serif; overflow: hidden; user-select: none;
+            display: flex; flex-direction: column;
+        }
+
+        header {
+            background-color: #09090a;
+            padding: 15px 30px;
+            padding-top: calc(15px + env(safe-area-inset-top, 0px));
+            display: flex; justify-content: center; align-items: center;
+            border-bottom: 3px solid #c5a059;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            z-index: 10;
+            position: relative;
+        }
+
+        .header-title {
+            font-size: 1.4rem; letter-spacing: 3px; color: #f5e3b5;
+            text-transform: uppercase; font-family: 'Georgia', serif;
+            font-weight: bold; margin: 0; padding: 0; line-height: normal;
+            text-align: center;
+        }
+
+        .header-scolia {
+            position: absolute;
+            left: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: sans-serif;
+            user-select: none;
+        }
+        .header-scolia-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #777;
+        }
+        .header-scolia-pill {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            border-radius: 999px;
+            border: 1px solid #555;
+            color: #ccc;
+            background: rgba(255,255,255,0.04);
+            min-width: 78px;
+            text-align: center;
+        }
+        .header-scolia-pill.ok { border-color: #56ffc9; color: #56ffc9; background: rgba(14, 112, 80, 0.35); }
+        .header-scolia-pill.warn { border-color: #ffd54f; color: #ffd54f; background: rgba(120, 90, 10, 0.35); }
+        .header-scolia-pill.bad { border-color: #ff8a80; color: #ff8a80; background: rgba(100, 20, 20, 0.4); }
+        .header-scolia-pill.muted { border-color: #666; color: #888; }
+        .header-scolia-detail {
+            font-size: 0.65rem;
+            color: #888;
+            letter-spacing: 0.4px;
+            max-width: 260px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .app-version {
+            position: absolute;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.38);
+            font-size: 0.85rem;
+            letter-spacing: 1.5px;
+            text-transform: lowercase;
+            font-weight: 600;
+            font-family: sans-serif;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .viewer-container {
+            flex: 1; width: 100%; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* Full-viewport stage BG — matched to control.html */
+        .viewer-shared-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .viewer-shared-bg .dynamic-bg-viewport {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 1;
+            filter: brightness(0.55) contrast(1.05);
+            opacity: 0;
+            transition: opacity 0.6s ease-in-out;
+            will-change: opacity;
+        }
+        .viewer-shared-bg .dynamic-bg-viewport.active-layer {
+            opacity: 1;
+        }
+        .viewer-shared-bg-scrim {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(18,18,20,0.45) 0%, rgba(18,18,20,0.15) 22%, rgba(0,0,0,0) 48%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* --- WAITING LOUNGE LAYOUT --- */
+        .waiting-stage {
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+            position: relative; width: 100%; height: 100%; justify-content: center; box-sizing: border-box;
+        }
+
+        /* Match control .game-selection-header — title pinned to top */
+        .waiting-logo {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            margin: 0;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            z-index: 3;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.8), 0 0 30px rgba(197,160,89,0.2);
+            pointer-events: none;
+        }
+
+        /* REGISTRATION awaiting copy: top slot, original .waiting-sub look */
+        .waiting-logo.is-awaiting {
+            font-size: 2.0rem;
+            font-weight: normal;
+            color: #c5a059;
+            letter-spacing: 4px;
+            text-shadow:
+                -2px -2px 0 #000,
+                 2px -2px 0 #000,
+                -2px  2px 0 #000,
+                 2px  2px 0 #000,
+                 0    4px 10px rgba(0,0,0,0.9);
+        }
+
+        .waiting-sub {
+            font-size: 2.0rem;
+            color: #c5a059;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            z-index: 3;
+            margin: 0;
+            text-shadow:
+                -2px -2px 0 #000,
+                 2px -2px 0 #000,
+                -2px  2px 0 #000,
+                 2px  2px 0 #000,
+                 0    4px 10px rgba(0,0,0,0.9);
+        }
+
+        .roster-anchor-box {
+            position: relative;
+            left: auto;
+            bottom: auto;
+            transform: none;
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: center;
+            z-index: 3;
+            flex-wrap: wrap;
+            width: 85%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .roster-anchor-box.is-doubles-teams {
+            display: grid;
+            gap: 18px 24px;
+            justify-content: center;
+            justify-items: stretch;
+            align-items: stretch;
+        }
+        .roster-anchor-box.is-doubles-teams[data-team-count="1"] { grid-template-columns: repeat(1, minmax(200px, 280px)); }
+        .roster-anchor-box.is-doubles-teams[data-team-count="2"] { grid-template-columns: repeat(2, minmax(200px, 280px)); }
+        .roster-anchor-box.is-doubles-teams[data-team-count="3"] { grid-template-columns: repeat(3, minmax(200px, 280px)); }
+        .roster-anchor-box.is-doubles-teams[data-team-count="4"] { grid-template-columns: repeat(4, minmax(180px, 240px)); }
+        .roster-anchor-box.is-doubles-teams[data-team-count="5"],
+        .roster-anchor-box.is-doubles-teams[data-team-count="6"] {
+            grid-template-columns: repeat(3, minmax(200px, 280px));
+            justify-content: center;
+            width: max-content;
+            max-width: 85%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Doubles gold team frames — REGISTRATION + GAME_SELECTION (revert with renderViewerRoster) */
+        /* fieldset+legend: continuous rounded border with a real gap under the title */
+        .viewer-team-box {
+            position: relative;
+            margin: 0;
+            min-inline-size: 0;
+            border: 2px solid #c5a059;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px 18px 16px;
+            min-width: 200px;
+        }
+        .viewer-team-label {
+            float: none;
+            width: max-content;
+            margin-inline: auto;
+            padding: 0 calc(14px - 1.5px) 0 14px; /* cancel trailing letter-spacing after digit */
+            background: transparent;
+            color: #f5e3b5;
+            font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', serif;
+            font-size: 0.85rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            font-weight: bold;
+            font-variant-numeric: lining-nums;
+            position: relative;
+            pointer-events: none;
+        }
+        /* Vertical end-caps: ───| Team X |─── */
+        .viewer-team-label::before,
+        .viewer-team-label::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 2px;
+            height: 12px;
+            background: #c5a059;
+            transform: translateY(-50%);
+        }
+        .viewer-team-label::before { left: 0; }
+        .viewer-team-label::after { right: 0; }
+        .viewer-team-members {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        .viewer-roster-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .viewer-roster-avatar {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid #c5a059;
+            background: #25252c;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+            margin-bottom: 12px;
+        }
+        .viewer-roster-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .viewer-roster-avatar .initials {
+            font-size: 2.8rem;
+            color: #f5e3b5;
+            font-weight: bold;
+        }
+        .viewer-roster-name {
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #fff;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+        }
+        .viewer-team-box .viewer-roster-avatar {
+            width: 90px;
+            height: 90px;
+            margin-bottom: 10px;
+        }
+        .viewer-team-box .viewer-roster-avatar .initials {
+            font-size: 2.2rem;
+        }
+        .viewer-team-box .viewer-roster-name {
+            font-size: 1.05rem;
+        }
+
+        .game-frame-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 5; display: none;
+        }
+        .game-frame-container.active-arena {
+            display: block;
+        }
+
+        #gameFrame {
+            width: 100%; height: 100%; border: none; background: transparent;
+            opacity: 0; transform: scale(1.02);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+        #gameFrame.active-frame {
+            opacity: 1; transform: scale(1);
+        }
+
+        /* One-shot selection/event clips — video only */
+        .viewer-event-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+        }
+        .viewer-event-overlay.active {
+            display: flex;
+            animation: viewerEventFadeIn 0.22s ease forwards;
+        }
+        .viewer-event-overlay video {
+            width: 60vw;
+            height: 60vh;
+            max-width: 60%;
+            max-height: 60%;
+            object-fit: contain;
+            background: #000;
+            border-radius: 10px;
+            border: 3px solid #c5a059;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+        }
+        @keyframes viewerEventFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-scolia" id="headerScolia" title="Board status">
+            <span class="header-scolia-label">Board</span>
+            <span class="header-scolia-pill muted" id="headerScoliaPill">—</span>
+            <span class="header-scolia-detail" id="headerScoliaDetail"></span>
+        </div>
+        <div class="header-title" id="headerTitle">Richie's Flight Deck</div>
+        <span class="app-version" id="appVersion"></span>
+    </header>
+
+    <div id="viewerSharedBg" class="viewer-shared-bg" aria-hidden="true">
+        <div id="viewerBg1" class="dynamic-bg-viewport"></div>
+        <div id="viewerBg2" class="dynamic-bg-viewport"></div>
+        <div class="viewer-shared-bg-scrim"></div>
+    </div>
+
+    <div class="viewer-container">
+        
+        <div id="waitingLoungePanel" class="waiting-stage">
+            <h1 class="waiting-logo" id="mirrorGameTitleDisplay"></h1>
+            <div class="waiting-sub" id="waitingStageSubtext"></div>
+            
+            <div id="viewerRosterContainer" class="roster-anchor-box"></div>
+        </div>
+
+        <div id="arenaFrameContainer" class="game-frame-container">
+            <iframe id="gameFrame" src="" allow="autoplay"></iframe>
+        </div>
+
+    </div>
+
+    <div id="viewerEventOverlay" class="viewer-event-overlay" aria-hidden="true">
+        <video id="viewerEventVideo" class="fd-event-video" playsinline preload="auto"></video>
+    </div>
+
+    <script src="/keep-awake.js?v=7"></script>
+    <script>
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        let socket = null;
+        let socketReconnectTimer = null;
+        let lastKnownState = null;
+        let activeLayerId = 1;
+        let locallyMirroredGame = '';
+        let lastViewerCueId = null;
+        let viewerEventHideTimer = null;
+        let wakeLockExpiryTimer = null;
+        const REGISTRATION_BG = "url('/assets/app/viewer_registration.png')";
+        const VIEWER_CUES = {
+        };
+
+        function computeWakeLockDesired(state) {
+            if (!state || state.currentScreen !== 'IN_GAME') return false;
+            const idleMs = Number(state.inGameIdleMs);
+            const last = Number(state.lastVenueActivityAt);
+            if (!Number.isFinite(idleMs) || !Number.isFinite(last)) {
+                return state.wakeLockDesired !== false;
+            }
+            return (Date.now() - last) < idleMs;
+        }
+
+        function syncWakeLockFromState(state) {
+            const want = computeWakeLockDesired(state);
+            if (window.FlightDeckWakeLock) window.FlightDeckWakeLock.setDesired(want);
+            if (wakeLockExpiryTimer) {
+                clearTimeout(wakeLockExpiryTimer);
+                wakeLockExpiryTimer = null;
+            }
+            if (!want || !state || state.currentScreen !== 'IN_GAME') return;
+            const idleMs = Number(state.inGameIdleMs) || (5 * 60 * 1000);
+            const last = Number(state.lastVenueActivityAt) || Date.now();
+            const remain = Math.max(250, (last + idleMs) - Date.now());
+            wakeLockExpiryTimer = setTimeout(() => {
+                wakeLockExpiryTimer = null;
+                if (window.FlightDeckWakeLock) window.FlightDeckWakeLock.setDesired(false);
+            }, remain);
+        }
+
+        function hideViewerEventOverlay() {
+            if (viewerEventHideTimer) {
+                clearTimeout(viewerEventHideTimer);
+                viewerEventHideTimer = null;
+            }
+            const overlay = document.getElementById('viewerEventOverlay');
+            const video = document.getElementById('viewerEventVideo');
+            if (overlay) {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            if (video) {
+                try {
+                    video.pause();
+                    video.removeAttribute('src');
+                    video.load();
+                } catch (_) {}
+            }
+        }
+
+        function playViewerCue(state) {
+            const cue = state && state.viewerCue;
+            if (!cue || !cue.id || cue.id === lastViewerCueId) return;
+            lastViewerCueId = cue.id;
+
+            const def = VIEWER_CUES[cue.kind];
+            if (!def || !def.url) return;
+            if (state.viewerVideoEnabled === false) return;
+
+            const overlay = document.getElementById('viewerEventOverlay');
+            const video = document.getElementById('viewerEventVideo');
+            if (!overlay || !video) return;
+
+            if (viewerEventHideTimer) {
+                clearTimeout(viewerEventHideTimer);
+                viewerEventHideTimer = null;
+            }
+
+            const finish = () => {
+                viewerEventHideTimer = setTimeout(hideViewerEventOverlay, def.holdAfterEndMs || 0);
+            };
+
+            video.onended = finish;
+            video.onerror = () => hideViewerEventOverlay();
+
+            try {
+                video.pause();
+                if (video.getAttribute('src') !== def.url) {
+                    video.src = def.url;
+                    video.load();
+                }
+                video.currentTime = 0;
+                video.muted = false;
+                video.volume = 1;
+            } catch (_) {}
+
+            overlay.classList.add('active');
+            overlay.setAttribute('aria-hidden', 'false');
+
+            const p = video.play();
+            if (p && typeof p.catch === 'function') {
+                p.catch(() => {
+                    try {
+                        video.muted = true;
+                        video.play().catch(() => hideViewerEventOverlay());
+                    } catch (_) {
+                        hideViewerEventOverlay();
+                    }
+                });
+            }
+        }
+
+        function applyRegistrationBackground() {
+            const layer1 = document.getElementById('viewerBg1');
+            const layer2 = document.getElementById('viewerBg2');
+            if (!layer1 || !layer2) return;
+            layer1.style.backgroundImage = REGISTRATION_BG;
+            layer2.style.backgroundImage = 'none';
+            layer1.classList.add('active-layer');
+            layer2.classList.remove('active-layer');
+            activeLayerId = 1;
+            locallyMirroredGame = '';
+        }
+
+        applyRegistrationBackground();
+
+        function renderHeaderScolia(state) {
+            const pill = document.getElementById('headerScoliaPill');
+            const detail = document.getElementById('headerScoliaDetail');
+            const wrap = document.getElementById('headerScolia');
+            if (!pill) return;
+
+            const tone = state.headerTone || 'muted';
+            const label = state.headerLabel || '—';
+            pill.className = `header-scolia-pill ${tone}`;
+            pill.textContent = label;
+
+            const bits = [];
+            if (state.boardStatus) bits.push(state.boardStatus);
+            if (state.boardPhase) bits.push(state.boardPhase);
+            if (state.awaitingTakeout) bits.push('awaiting pull');
+            if (state.lastThrow && state.lastThrow.sector) {
+                bits.push(`last ${state.lastThrow.sector}`);
+            }
+            detail.textContent = bits.join(' · ');
+
+            wrap.title = [
+                `Connection: ${state.connection || '—'}`,
+                `Status: ${state.boardStatus || '—'}`,
+                `Phase: ${state.boardPhase == null ? '—' : state.boardPhase}`,
+                state.awaitingTakeout ? 'Awaiting takeout' : null,
+                state.lastError || null
+            ].filter(Boolean).join('\n');
+        }
+
+        function buildViewerRosterPlayer(p) {
+            const pWrapper = document.createElement('div');
+            pWrapper.className = 'viewer-roster-player';
+
+            const avatarBox = document.createElement('div');
+            avatarBox.className = 'viewer-roster-avatar';
+
+            if (p.avatar) {
+                const img = document.createElement('img');
+                img.src = p.avatar;
+                img.alt = '';
+                avatarBox.appendChild(img);
+            } else {
+                const initials = document.createElement('div');
+                initials.className = 'initials';
+                initials.textContent = (p.name || '?')[0].toUpperCase();
+                avatarBox.appendChild(initials);
+            }
+
+            const nameLabel = document.createElement('div');
+            nameLabel.className = 'viewer-roster-name';
+            nameLabel.textContent = p.name || '';
+
+            pWrapper.appendChild(avatarBox);
+            pWrapper.appendChild(nameLabel);
+            return pWrapper;
+        }
+
+        function renderViewerRoster(state) {
+            const rosterContainer = document.getElementById('viewerRosterContainer');
+            if (!rosterContainer) return;
+
+            if (state.currentScreen !== 'REGISTRATION' && state.currentScreen !== 'GAME_SELECTION') {
+                rosterContainer.innerHTML = '';
+                return;
+            }
+
+            rosterContainer.innerHTML = '';
+            rosterContainer.classList.remove('is-doubles-teams');
+            rosterContainer.removeAttribute('data-team-count');
+
+            // REGISTRATION + GAME_SELECTION doubles: group pairs in registration-style gold frames
+            if (state.lineupMode === 'doubles') {
+                const byId = {};
+                (state.players || []).forEach(p => { byId[p.id] = p; });
+                const teams = state.doublesTeams || [];
+                let teamNum = 0;
+                teams.forEach((slots) => {
+                    const members = (slots || []).map(id => id && byId[id]).filter(Boolean);
+                    if (!members.length) return;
+                    teamNum += 1;
+                    const box = document.createElement('fieldset');
+                    box.className = 'viewer-team-box';
+                    const label = document.createElement('legend');
+                    label.className = 'viewer-team-label';
+                    label.textContent = `Team ${teamNum}`;
+                    const row = document.createElement('div');
+                    row.className = 'viewer-team-members';
+                    members.forEach(member => row.appendChild(buildViewerRosterPlayer(member)));
+                    box.appendChild(label);
+                    box.appendChild(row);
+                    rosterContainer.appendChild(box);
+                });
+                const n = rosterContainer.children.length;
+                if (n > 0) {
+                    rosterContainer.classList.add('is-doubles-teams');
+                    rosterContainer.setAttribute('data-team-count', String(n));
+                }
+                return;
+            }
+
+            // Singles REGISTRATION + GAME_SELECTION: seated lineup only
+            const byIdSingles = {};
+            (state.players || []).forEach(p => { byIdSingles[p.id] = p; });
+            const singlesIds = (state.singlesLineup && state.singlesLineup.length)
+                ? state.singlesLineup.filter(Boolean)
+                : (state.players || []).map(p => p.id);
+            singlesIds.forEach((id) => {
+                const p = byIdSingles[id];
+                if (p) rosterContainer.appendChild(buildViewerRosterPlayer(p));
+            });
+        }
+
+        function connectSocket() {
+            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+            if (socketReconnectTimer) {
+                clearTimeout(socketReconnectTimer);
+                socketReconnectTimer = null;
+            }
+
+            socket = new WebSocket(`${wsProtocol}://${window.location.host}`);
+            socket.onopen = () => console.log('Viewer socket connected');
+            socket.onclose = () => {
+                console.warn('Viewer socket closed — retrying in 1s');
+                socketReconnectTimer = setTimeout(connectSocket, 1000);
+            };
+            socket.onerror = () => {};
+            socket.onmessage = handleSocketMessage;
+        }
+
+        const gameBackgroundMaps = {
+            demolition: "url('/assets/demolition/bg.jpg')",
+            limbo: "url('/assets/limbo/bg.jpg')",
+            derby: "url('/assets/derby/bg.jpg')",
+            killer: "url('/assets/killer/bg.jpg')",
+            quackshot: "url('/assets/quackshot/bg.jpg')",
+            cricket: "url('/assets/cricket/bg.jpg')",
+            x01: "url('/assets/x01/bg.jpg')",
+            shanghai: "url('/assets/shanghai/bg.jpg')",
+            warmup: "url('/assets/warmup/bg.jpg')",
+            quick10: "url('/assets/quick10/bg.jpg')",
+        };
+
+        /* Portrait shanghai art — fill screen width; height crops top/bottom as needed. */
+        const gameBackgroundSizes = {
+            shanghai: '100% auto',
+            x01: '100% auto',
+            quick10: '100% auto',
+        };
+        const gameBackgroundPositions = {
+            shanghai: 'center 28%',
+            x01: 'center 28%',
+            quick10: 'center 28%',
+        };
+
+        function pushStateToGameFrame() {
+            const frame = document.getElementById('gameFrame');
+            if (frame && frame.contentWindow && lastKnownState) {
+                frame.contentWindow.postMessage({ type: 'SYNC_STATE', state: lastKnownState }, '*');
+            }
+        }
+
+        function mirrorSelectedGameVisuals(gameKey) {
+            if (!gameKey || !gameBackgroundMaps[gameKey]) return;
+            if (gameKey === locallyMirroredGame) return;
+
+            const targetBgUrl = gameBackgroundMaps[gameKey];
+            const layer1 = document.getElementById('viewerBg1');
+            const layer2 = document.getElementById('viewerBg2');
+            const activeLayer = activeLayerId === 1 ? layer1 : layer2;
+            const nextLayer = activeLayerId === 1 ? layer2 : layer1;
+
+            nextLayer.style.backgroundSize = gameBackgroundSizes[gameKey] || 'cover';
+            nextLayer.style.backgroundPosition = gameBackgroundPositions[gameKey] || 'center';
+            nextLayer.style.backgroundImage = targetBgUrl;
+            activeLayer.classList.remove('active-layer');
+            nextLayer.classList.add('active-layer');
+            
+            activeLayerId = activeLayerId === 1 ? 2 : 1;
+            locallyMirroredGame = gameKey;
+
+            const titleDisplay = document.getElementById('mirrorGameTitleDisplay');
+            if (titleDisplay) {
+                titleDisplay.classList.remove('is-awaiting');
+                titleDisplay.innerText = gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : gameKey.toUpperCase());
+            }
+        }
+
+        function handleSocketMessage(event) {
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === 'BOARD_UPDATE' || msg.type === 'SCOLIA_UPDATE') {
+                renderHeaderScolia(msg.data || {});
+                return;
+            }
+
+            if (msg.type === 'STATE_UPDATE') {
+                const state = msg.data;
+                lastKnownState = state;
+                syncWakeLockFromState(state);
+
+                // Version badge is server-supplied (package.json) rather than a
+                // literal in this file — see APP_VERSION in server.js.
+                if (state.appVersion) {
+                    const vEl = document.getElementById('appVersion');
+                    if (vEl && vEl.textContent !== state.appVersion) vEl.textContent = state.appVersion;
+                }
+
+                const arenaName = state.arenaName || "Richie's Flight Deck";
+                const headerTitle = document.getElementById('headerTitle');
+                if (headerTitle && headerTitle.textContent !== arenaName) headerTitle.textContent = arenaName;
+                if (document.title !== arenaName) document.title = arenaName;
+
+                const waitingPanel = document.getElementById('waitingLoungePanel');
+                const arenaContainer = document.getElementById('arenaFrameContainer');
+                const frame = document.getElementById('gameFrame');
+                const titleDisplay = document.getElementById('mirrorGameTitleDisplay');
+                const waitingSub = document.getElementById('waitingStageSubtext');
+
+                const rosterContainer = document.getElementById('viewerRosterContainer');
+                if (rosterContainer) {
+                    renderViewerRoster(state);
+                }
+
+                playViewerCue(state);
+
+                if (state.currentScreen === 'REGISTRATION') {
+                    arenaContainer.classList.remove('active-arena');
+                    frame.classList.remove('active-frame');
+                    frame.src = "";
+                    
+                    // Top title slot (top: 30px) with original awaiting font/size
+                    titleDisplay.classList.add('is-awaiting');
+                    titleDisplay.innerText = "Awaiting Squad Lineup Setup...";
+                    waitingSub.innerText = "";
+                    applyRegistrationBackground();
+                } 
+                else if (state.currentScreen === 'GAME_SELECTION') {
+                    arenaContainer.classList.remove('active-arena');
+                    frame.classList.remove('active-frame');
+                    frame.src = "";
+                    
+                    titleDisplay.classList.remove('is-awaiting');
+                    waitingSub.innerText = "";
+                    
+                    mirrorSelectedGameVisuals(state.selectedGame || 'demolition');
+                } 
+                else if (state.currentScreen === 'IN_GAME') {
+                    hideViewerEventOverlay();
+                    arenaContainer.classList.add('active-arena');
+                    frame.classList.add('active-frame');
+                    
+                    const desiredSrc = `games/${state.selectedGame}.html`;
+                    if (!frame.src.includes(desiredSrc)) {
+                        frame.src = desiredSrc;
+                        frame.onload = () => {
+                            pushStateToGameFrame();
+                        };
+                    } else {
+                        pushStateToGameFrame();
+                    }
+                }
+            }
+        }
+
+        connectSocket();
+
+        window.addEventListener('message', (event) => {
+            const data = event && event.data;
+            if (!data || (data.type !== 'TVM_COMPLETE' && data.type !== 'BUST_VIDEO_COMPLETE')) return;
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            try {
+                // Server switch listens on `action` (Control convention)
+                socket.send(JSON.stringify({ action: data.type, type: data.type }));
+            } catch (_) {}
+        });
+
+        // Forward a genuine gesture into the active game iframe so it can unlock
+        // audio/video (WebKit/Chrome autoplay-with-sound policy needs an unmuted
+        // play() inside a real user-gesture call stack). A tap/click on THIS page's own
+        // chrome (header, frame border) never reaches the iframe's window on its own --
+        // DOM events don't cross frame boundaries -- so relying only on gestures inside
+        // each game's own document misses those entirely.
+        function unlockGameFrameAudio() {
+            const frame = document.getElementById('gameFrame');
+            try {
+                const api = frame && frame.contentWindow && frame.contentWindow.FlightDeckWinnerVideo;
+                if (api && typeof api.unlock === 'function') api.unlock();
+            } catch (_) {}
+        }
+        ['pointerdown', 'keydown', 'touchstart'].forEach((evt) => {
+            window.addEventListener(evt, unlockGameFrameAudio, { passive: true });
+        });
+    </script>
+</body>
+</html>

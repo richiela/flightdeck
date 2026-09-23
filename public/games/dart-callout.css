@@ -1,0 +1,127 @@
+/* FC_DART_CALLOUT v1
+   Brief full-board announce after every dart. Revert: delete this file + dart-callout.js
+   and remove <link>/<script> tags from game HTML; remove server wrap + end_dart_callout. */
+
+.fc-dart-callout {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    background: rgba(4, 6, 10, 0.55);
+}
+
+.fc-dart-callout.is-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.fc-dart-callout-card {
+    text-align: center;
+    padding: 28px 48px;
+    border-radius: 16px;
+    border: 3px solid rgba(255, 255, 255, 0.55);
+    background: rgba(10, 12, 18, 0.88);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    max-width: min(90vw, 720px);
+    transform: scale(0.92);
+    transition: transform 0.18s ease;
+}
+
+.fc-dart-callout.is-visible .fc-dart-callout-card {
+    transform: scale(1);
+}
+
+.fc-dart-callout-avatar {
+    width: var(--fc-avatar-overlay, 140px);
+    height: var(--fc-avatar-overlay, 140px);
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    border: 4px solid #c5a059;
+    overflow: hidden;
+    background: #1a1a1f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.fc-dart-callout-avatar[hidden] {
+    display: none !important;
+}
+
+.fc-dart-callout-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fc-dart-callout-initials {
+    font-family: var(--fc-font, 'Arial Rounded MT Bold', 'Helvetica Rounded', sans-serif);
+    font-size: 2.4rem;
+    font-weight: 900;
+    color: #f0eedf;
+}
+
+.fc-dart-callout-name {
+    font-family: var(--fc-font, 'Arial Rounded MT Bold', 'Helvetica Rounded', sans-serif);
+    font-size: 1.1rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 10px;
+}
+
+.fc-dart-callout-hit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.18em;
+    flex-wrap: wrap;
+    font-size: clamp(3.5rem, 10vw, 7rem);
+}
+
+.fc-dart-callout-label {
+    font-family: var(--fc-font, 'Arial Rounded MT Bold', 'Helvetica Rounded', sans-serif);
+    font-size: 1em;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 2px;
+    color: #fff;
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+.fc-dart-callout-label[hidden] {
+    display: none !important;
+}
+
+.fc-dart-callout-mark {
+    width: 0.9em;
+    height: 0.9em;
+    flex: 0 0 auto;
+    margin: 0;
+    color: #f5e3b5;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+}
+
+.fc-dart-callout-mark[hidden] {
+    display: none !important;
+}
+
+.fc-dart-callout.is-cricket-marks .fc-dart-callout-name {
+    margin-bottom: 6px;
+}
+
+.fc-dart-callout.is-miss .fc-dart-callout-label {
+    color: #ff8a80;
+}
+
+.fc-dart-callout.is-hit .fc-dart-callout-label {
+    color: #f5e3b5;
+}

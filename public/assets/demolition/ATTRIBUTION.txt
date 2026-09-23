@@ -1,0 +1,34 @@
+bust-collapse.mp3
+Source: Mixkit — "Explosion with rocks debris"
+URL: https://mixkit.co/free-sound-effects/explosion-with-rocks-debris/
+License: Mixkit License (free to use in projects)
+
+bust-wile-e.mp4
+Source: YouTube clip (Wile E. Coyote / Road Runner snippet)
+URL: https://www.youtube.com/watch?v=9o7LPaMqFP8
+Notes: ~5.4s clip (1s trimmed from end), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+bust-happy-gilmore.mp4
+Source: YouTube clip ("HAPPYGILMORE YOU SUCK")
+URL: https://www.youtube.com/watch?v=ZvM7r2d0d8Q
+Notes: Section 0:01–0:05 (~4s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+bust-break-concentration.mp4
+Source: YouTube clip ("Im Sorry Did I Break Your Concentration?")
+URL: https://www.youtube.com/watch?v=QIjWKWpXUJM
+Notes: Section 4:19–4:24 (~5s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+bust-digital-circus.mp4
+Source: YouTube clip (THE AMAZING DIGITAL CIRCUS - Ep 4: Fast Food Masquerade)
+URL: https://www.youtube.com/watch?v=Q9KWcWKo2T8
+Notes: Section 11:55–12:03 (~8s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+bust-spongebob-no-skills.mp4
+Source: YouTube clip (SpongeBob — "You have no skills and you’re a loser")
+URL: https://www.youtube.com/watch?v=Yu7gSQ_swso
+Notes: Section 0:10–0:16 (~6s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+
+Bust videos: any public/assets/demolition/bust-*.mp4 is picked at random when Video mode is on.
+Bust SFX: bust-collapse.mp3 (demolition only).
+Shared winner videos + cheers/horns live in public/assets/shared/.
+Prefer exporting/normalizing new clips to 1280×720 16:9 (pad, don’t crop).

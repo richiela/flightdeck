@@ -1,0 +1,17 @@
+became-charon.mp4
+Source: YouTube clip (Charon | Best Scenes from the John Wick Movies)
+URL: https://www.youtube.com/watch?v=XccAioHFCso
+Notes: Section 0:41–0:46 (~5s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+Played on Killer "became killer" overlay when Viewer Video mode is on.
+
+lost-excommunicado.mp4
+Source: YouTube clip (John Wick: Chapter 3 - Parabellum - Excommunicado Scene)
+URL: https://www.youtube.com/watch?v=AGdAKZSLFbY
+Notes: Section 0:03.1–0:07.5 (~4.4s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+Played on Killer "lost killer / stripped" overlay when Viewer Video mode is on.
+
+elim-skyfall-take-the-shot.mp4
+Source: YouTube clip (SKYFALL Clip - Take The Shot - In Theaters 11/9)
+URL: https://www.youtube.com/watch?v=F0Mgs8h4UKE
+Notes: Section 0:37.25–0:42 (~4.8s), re-encoded H.264/AAC, normalized to 1280×720 16:9 with pad.
+Played on Killer "eliminated / death" overlay when Viewer Video mode is on.

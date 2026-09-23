@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <title>Quick 10</title>
+    <style>
+        :root {
+            --ice: #5eb4d9;
+            --ice-glow: #9fdcf0;
+            --steel: #2f6f96;
+            --deep: #0a1c2e;
+            --ink: #061018;
+            --fog: #e8f4fa;
+            --frame: #8ecae6;
+            --panel: rgba(6, 18, 30, 0.48);
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 28%, #3d8ec8 0%, #1a5080 40%, #0a2038 78%, #061018 100%);
+            background: var(--page-bg);
+            color: var(--fog);
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid var(--frame);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted var(--frame);
+            border-radius: 8px;
+        }
+
+        .window-game-title {
+            position: absolute;
+            bottom: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: var(--frame);
+            padding: 2px 20px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid var(--frame);
+            border-right: 4px solid var(--frame);
+        }
+
+        .arena {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 1fr minmax(340px, 430px);
+            grid-template-rows: auto auto 1fr;
+            gap: 18px 22px;
+            padding: 34px 32px 46px;
+            z-index: 5;
+        }
+
+        .score-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 14px 22px;
+            border-radius: 12px;
+            background: var(--panel);
+            border: 2px solid rgba(142, 202, 230, 0.35);
+        }
+
+        .score-bar .player-slot {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .score-bar .player-slot .q10-avatar {
+            width: var(--fc-avatar-inplay);
+            height: var(--fc-avatar-inplay);
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid var(--frame);
+            background: rgba(0,0,0,0.35);
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .score-bar .player-slot .q10-avatar img {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+
+        .score-bar .player-slot .q10-avatar .initials {
+            font-weight: 900;
+            font-size: 1.7rem;
+            color: var(--frame);
+        }
+
+        .score-bar .player-name {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .score-bar .meta {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 32px;
+            flex: 1 1 auto;
+            max-width: 680px;
+            margin-left: auto;
+            padding-left: 24px;
+        }
+
+        .score-bar .meta .stat {
+            text-align: center;
+            min-width: 7.2rem;
+        }
+
+        .score-bar .meta .stat .lbl {
+            display: block;
+            font-size: 1.05rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(232, 244, 250, 0.55);
+            font-weight: 900;
+        }
+
+        .score-bar .meta .stat .val {
+            font-size: 3.6rem;
+            font-weight: 900;
+            font-variant-numeric: tabular-nums;
+            color: var(--frame);
+            line-height: 1.1;
+        }
+
+        .visit-live {
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .visit-label {
+            font-size: 1.15rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 900;
+            color: rgba(232, 244, 250, 0.65);
+        }
+
+        .dart-row {
+            display: flex;
+            align-items: stretch;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .dart-box {
+            flex: 1 1 0;
+            min-height: 180px;
+            border-radius: 12px;
+            border: 2px solid rgba(6, 16, 24, 0.55);
+            background: rgba(6, 16, 24, 0.32);
+            box-shadow: inset 0 0 0 1px rgba(142, 202, 230, 0.18);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: rgba(232, 244, 250, 0.28);
+            font-weight: 900;
+        }
+
+        .dart-box.waiting::after {
+            content: '—';
+            font-size: 2.6rem;
+            opacity: 0.45;
+        }
+
+        .dart-box.filled {
+            color: var(--fog);
+            background: rgba(6, 16, 24, 0.58);
+            border-color: var(--ink);
+            animation: dartLand 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dart-box.total-box {
+            flex: 0.8 1 0;
+            background: rgba(94, 180, 217, 0.16);
+            border-color: rgba(142, 202, 230, 0.5);
+        }
+
+        .dart-box.total-box.filled {
+            background: linear-gradient(180deg, rgba(94, 180, 217, 0.5), rgba(26, 80, 128, 0.65));
+            color: var(--ink);
+        }
+
+        .dart-box .mult {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 44px;
+            height: 44px;
+            padding: 0 10px;
+            border-radius: 8px;
+            background: var(--frame);
+            color: var(--ink);
+            font-size: 1.5rem;
+            font-weight: 900;
+        }
+
+        .dart-box .mult.d { background: #7AD7F0; }
+        .dart-box .mult.t { background: #ff8a80; }
+
+        .dart-box .val {
+            font-size: 3.6rem;
+            line-height: 1;
+        }
+
+        .dart-box.miss .val {
+            font-size: 2rem;
+            letter-spacing: 2px;
+            color: rgba(232, 244, 250, 0.65);
+        }
+
+        .dart-box .slot-label {
+            font-size: 1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.55;
+        }
+
+        .rounds-wrap {
+            grid-column: 1;
+            grid-row: 3;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .rounds-head {
+            font-size: 1.15rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 900;
+            color: rgba(232, 244, 250, 0.65);
+        }
+
+        .rounds-grid {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            grid-auto-flow: column;
+            gap: 10px 18px;
+            overflow: hidden;
+        }
+
+        .round-row {
+            display: grid;
+            grid-template-columns: 52px 1fr 1fr 1fr 1fr;
+            gap: 6px;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(6, 16, 24, 0.28);
+            border: 1px solid rgba(6, 16, 24, 0.4);
+        }
+
+        .round-row.is-current {
+            border-color: rgba(142, 202, 230, 0.55);
+            background: rgba(94, 180, 217, 0.14);
+        }
+
+        .round-row .rn {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: var(--frame);
+            text-align: center;
+        }
+
+        .round-row .cell {
+            min-height: 54px;
+            border-radius: 6px;
+            background: rgba(0,0,0,0.22);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 900;
+            font-size: 1.5rem;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255,244,228,0.35);
+        }
+
+        .round-row .cell.filled { color: var(--fog); }
+        .round-row .cell.miss { color: rgba(255,244,228,0.5); font-size: 1.15rem; letter-spacing: 1px; }
+        .round-row .cell.total {
+            background: rgba(94, 180, 217, 0.22);
+            color: rgba(240, 215, 140, 0.45);
+            font-variant-numeric: tabular-nums;
+        }
+        .round-row .cell.total.filled {
+            color: var(--frame);
+        }
+        .round-row .cell .m {
+            width: 26px; height: 26px; border-radius: 5px;
+            background: var(--frame); color: var(--ink);
+            font-size: 1rem; display: inline-flex; align-items: center; justify-content: center;
+        }
+        .round-row .cell .m.d { background: #7AD7F0; }
+        .round-row .cell .m.t { background: #ff8a80; }
+
+        .leaderboard-panel {
+            grid-column: 2;
+            grid-row: 2 / 4;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(6, 16, 24, 0.4);
+            border: 2px solid rgba(142, 202, 230, 0.35);
+        }
+
+        .leaderboard-panel h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--frame);
+            font-weight: 900;
+        }
+
+        .lb-list {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow: hidden;
+        }
+
+        .lb-row {
+            display: grid;
+            grid-template-columns: 36px 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.22);
+        }
+
+        .lb-row .rank {
+            font-weight: 900;
+            color: var(--frame);
+            font-variant-numeric: tabular-nums;
+            font-size: 1.5rem;
+        }
+
+        .lb-row .who {
+            min-width: 0;
+        }
+
+        .lb-row .who .name {
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 1.4rem;
+        }
+
+        .lb-row .who .meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            min-width: 0;
+        }
+
+        .lb-row .who .date {
+            font-size: 1rem;
+            letter-spacing: 0.5px;
+            color: rgba(232, 244, 250, 0.45);
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .lb-row .who .badges {
+            display: flex;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 0.8rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 138, 128, 0.35);
+            color: #ffcfc9;
+            border: 1px solid rgba(255, 138, 128, 0.5);
+        }
+
+        .badge.debug { background: rgba(122, 215, 240, 0.25); color: #b8ecf8; border-color: rgba(122, 215, 240, 0.45); }
+        .badge.correct { background: rgba(240, 181, 90, 0.3); color: #f0d78c; border-color: rgba(240, 181, 90, 0.5); }
+
+        .lb-row .score {
+            font-weight: 900;
+            font-size: 1.9rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--fog);
+        }
+
+        .lb-empty {
+            color: rgba(255,244,228,0.4);
+            font-size: 1.3rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 20px 8px;
+            text-align: center;
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 6, 2, 0.72);
+            padding: 40px;
+            box-sizing: border-box;
+        }
+        .overlay.visible { display: flex; }
+
+        .overlay-card {
+            width: min(720px, 100%);
+            background: rgba(6, 16, 24, 0.95);
+            border: 3px solid var(--frame);
+            border-radius: 14px;
+            padding: 28px 32px;
+            text-align: center;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+        }
+
+        .overlay-card h2 {
+            margin: 0 0 8px;
+            color: var(--frame);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-size: 2.4rem;
+        }
+
+        .overlay-card .sub {
+            color: rgba(255,244,228,0.65);
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .pick-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .pick-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 14px;
+            justify-content: center;
+        }
+
+        .pick-chip {
+            width: calc(var(--fc-avatar-overlay) + 44px);
+            padding: 16px 10px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.35);
+            border: 2px solid rgba(142, 202, 230, 0.35);
+            box-sizing: border-box;
+        }
+
+        .pick-chip .av {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay); margin: 0 auto 10px;
+            border-radius: 50%; overflow: hidden;
+            border: 2px solid var(--frame);
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.3);
+        }
+        .pick-chip .av img { width: 100%; height: 100%; object-fit: cover; }
+        .pick-chip .av .initials { font-weight: 900; color: var(--frame); font-size: 1.6rem; }
+        .pick-chip .nm {
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 1.3rem;
+            letter-spacing: 1px;
+        }
+
+        .complete-score {
+            font-size: 6rem;
+            font-weight: 900;
+            font-variant-numeric: tabular-nums;
+            color: var(--fog);
+            line-height: 1;
+            margin: 12px 0;
+        }
+
+        .complete-name {
+            font-size: 2rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--frame);
+        }
+
+        .full-lb-list {
+            text-align: left;
+            max-height: 420px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(6, 16, 24, 0.95);
+            border: 2px solid var(--frame);
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: var(--frame); margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 1.3rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes dartLand {
+            from { transform: translateY(-8px) scale(0.96); opacity: 0.4; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">Quick 10</div>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Quick 10</h3>
+        <p>• One player. Ten visits of three darts — thirty darts total.</p>
+        <p>• Highest score wins a spot on the leaderboard.</p>
+        <p>• Scores entered via Debug or Correct Score still count, but get a badge.</p>
+    </div>
+
+    <div class="arena" id="playArena">
+        <div class="score-bar">
+            <div class="player-slot">
+                <div class="q10-avatar" id="playerAvatar"></div>
+                <div class="player-name" id="playerName">—</div>
+            </div>
+            <div class="meta">
+                <div class="stat">
+                    <span class="lbl">Round</span>
+                    <span class="val" id="roundVal">1/10</span>
+                </div>
+                <div class="stat avg">
+                    <span class="lbl">Avg / Round</span>
+                    <span class="val" id="avgVal">—</span>
+                </div>
+                <div class="stat total">
+                    <span class="lbl">Score</span>
+                    <span class="val" id="totalVal">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="visit-live">
+            <div class="visit-label">This Visit</div>
+            <div class="dart-row" id="liveRow"></div>
+        </div>
+
+        <div class="leaderboard-panel">
+            <h3>Top 5</h3>
+            <div class="lb-list" id="top5List"></div>
+        </div>
+
+        <div class="rounds-wrap">
+            <div class="rounds-head">Rounds</div>
+            <div class="rounds-grid" id="roundsGrid"></div>
+        </div>
+    </div>
+
+    <div class="overlay" id="pickOverlay">
+        <div class="overlay-card">
+            <h2>Who Throws?</h2>
+            <p class="sub">Choose a player on Control</p>
+            <div class="pick-grid" id="pickGrid"></div>
+        </div>
+    </div>
+
+    <div class="overlay" id="completeOverlay">
+        <div class="overlay-card">
+            <h2>Quick 10 Complete</h2>
+            <div class="complete-name" id="completeName">PLAYER</div>
+            <div class="complete-score" id="completeScore">0</div>
+            <div class="who" id="completeBadges"></div>
+            <p class="sub" id="completeSub">Saved to the leaderboard</p>
+        </div>
+    </div>
+
+    <div class="overlay" id="fullLbOverlay">
+        <div class="overlay-card" style="width:min(640px,100%)">
+            <h2>Leaderboard</h2>
+            <p class="sub">Top 10 · badges mark assisted scores</p>
+            <div class="full-lb-list" id="fullLbList"></div>
+        </div>
+    </div>
+
+    <script>
+        const ROUNDS = 10;
+        let lastKnown = null;
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function avatarHtml(avatar, name) {
+            if (window.FC_renderAvatarHtml) return FC_renderAvatarHtml(avatar, name);
+            return `<div class="initials">${escapeHtml((name || '?').slice(0, 2).toUpperCase())}</div>`;
+        }
+
+        function visitTotal(darts) {
+            return (darts || []).reduce((sum, d) => sum + (Number(d && d.score) || 0), 0);
+        }
+
+        function integrityBadges(integrity) {
+            if (!integrity || integrity.clean) return '';
+            let html = '';
+            if (integrity.usedDebug) html += '<span class="badge debug">Debug</span>';
+            if (integrity.usedCorrection) html += '<span class="badge correct">Corrected</span>';
+            return html;
+        }
+
+        function dartBoxHtml(dart, index, isTotal, totalValue) {
+            if (isTotal) {
+                const filled = totalValue != null;
+                return `<div class="dart-box total-box ${filled ? 'filled' : 'waiting'}">
+                    <div class="slot-label">Total</div>
+                    ${filled ? `<div class="val">${escapeHtml(totalValue)}</div>` : ''}
+                </div>`;
+            }
+            if (!dart) {
+                return `<div class="dart-box waiting"><div class="slot-label">Dart ${index + 1}</div></div>`;
+            }
+            if (!dart.mult) {
+                return `<div class="dart-box filled miss">
+                    <div class="slot-label">Dart ${index + 1}</div>
+                    <div class="val">${escapeHtml(dart.label || 'MISS')}</div>
+                </div>`;
+            }
+            const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+            return `<div class="dart-box filled">
+                <div class="slot-label">Dart ${index + 1}</div>
+                <span class="mult ${mClass}">${escapeHtml(dart.mult)}</span>
+                <div class="val">${escapeHtml(dart.label)}</div>
+            </div>`;
+        }
+
+        function cellHtml(dart) {
+            if (!dart) return '<div class="cell">·</div>';
+            if (!dart.mult) {
+                return `<div class="cell filled miss">${escapeHtml(dart.label || 'MISS')}</div>`;
+            }
+            const mClass = dart.mult === 'T' ? 't' : (dart.mult === 'D' ? 'd' : '');
+            return `<div class="cell filled"><span class="m ${mClass}">${escapeHtml(dart.mult)}</span>${escapeHtml(dart.label)}</div>`;
+        }
+
+        function renderLive(gd) {
+            const row = document.getElementById('liveRow');
+            if (!row) return;
+            const darts = Array.isArray(gd.turnDarts) ? gd.turnDarts : [];
+            const total = darts.length ? visitTotal(darts) : null;
+            let html = '';
+            for (let i = 0; i < 3; i++) html += dartBoxHtml(darts[i], i, false);
+            html += dartBoxHtml(null, 3, true, total);
+            row.innerHTML = html;
+        }
+
+        function renderRounds(gd) {
+            const grid = document.getElementById('roundsGrid');
+            if (!grid) return;
+            const history = Array.isArray(gd.roundHistory) ? gd.roundHistory : [];
+            const byRound = new Map(history.map((r) => [r.round, r]));
+            const current = Math.max(1, Number(gd.currentRound) || 1);
+            const phase = gd.phase && gd.phase.type;
+            let html = '';
+            for (let r = 1; r <= ROUNDS; r++) {
+                const visit = byRound.get(r);
+                const darts = visit && Array.isArray(visit.darts) ? visit.darts : [];
+                const isCurrent = phase === 'playing' && r === current && !visit;
+                html += `<div class="round-row ${isCurrent ? 'is-current' : ''}">`;
+                html += `<div class="rn">${r}</div>`;
+                for (let i = 0; i < 3; i++) html += cellHtml(darts[i] || null);
+                if (visit) {
+                    html += `<div class="cell total filled">${escapeHtml(visit.total)}</div>`;
+                } else {
+                    html += `<div class="cell total">·</div>`;
+                }
+                html += '</div>';
+            }
+            grid.innerHTML = html;
+        }
+
+        function formatMatchDate(iso) {
+            const t = Date.parse(iso);
+            if (!Number.isFinite(t)) return '';
+            const d = new Date(t);
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const yy = String(d.getFullYear()).slice(-2);
+            let h = d.getHours();
+            const m = String(d.getMinutes()).padStart(2, '0');
+            const ampm = h >= 12 ? 'p' : 'a';
+            h = h % 12;
+            if (h === 0) h = 12;
+            return `${mm}/${dd}/${yy} ${h}:${m}${ampm}`;
+        }
+
+        function renderLbRows(list, limit) {
+            const rows = (list || []).slice(0, limit);
+            if (!rows.length) return '<div class="lb-empty">No scores yet</div>';
+            return rows.map((m, idx) => {
+                const name = (m.player && m.player.name) || 'PLAYER';
+                const badges = integrityBadges(m.integrity);
+                const date = formatMatchDate(m.playedAt);
+                return `<div class="lb-row">
+                    <div class="rank">${idx + 1}</div>
+                    <div class="who">
+                        <div class="name">${escapeHtml(name)}</div>
+                        <div class="meta">
+                            ${date ? `<span class="date">${escapeHtml(date)}</span>` : ''}
+                            ${badges ? `<span class="badges">${badges}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="score">${escapeHtml(m.totalScore)}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderTop5(state) {
+            const el = document.getElementById('top5List');
+            if (!el) return;
+            el.innerHTML = renderLbRows(state.quick10Leaderboard, 5);
+        }
+
+        function renderFullLb(state) {
+            const el = document.getElementById('fullLbList');
+            if (!el) return;
+            el.innerHTML = renderLbRows(state.quick10Leaderboard, 10);
+        }
+
+        function renderHeader(gd) {
+            const p = gd.player;
+            const name = (p && p.name) || 'Pick a player';
+            document.getElementById('playerName').textContent = name;
+            document.getElementById('playerAvatar').innerHTML = avatarHtml(p && p.avatar, name);
+            const round = Math.max(1, Number(gd.currentRound) || 1);
+            const done = gd.phase && gd.phase.type === 'complete';
+            document.getElementById('roundVal').textContent = done ? `${ROUNDS}/${ROUNDS}` : `${round}/${ROUNDS}`;
+            const total = Number(gd.totalScore) || 0;
+            document.getElementById('totalVal').textContent = String(total);
+            const completed = Array.isArray(gd.roundHistory) ? gd.roundHistory.length : 0;
+            const avgEl = document.getElementById('avgVal');
+            if (avgEl) {
+                avgEl.textContent = completed > 0
+                    ? String(Math.round(total / completed))
+                    : '—';
+            }
+        }
+
+        function pickRowSizes(count) {
+            const n = Math.max(0, Number(count) || 0);
+            if (n <= 0) return [];
+            if (n <= 4) return [n];
+            if (n === 5) return [3, 2];
+            if (n === 6) return [3, 3];
+            const rows = [];
+            let left = n;
+            while (left > 0) {
+                const take = Math.min(3, left);
+                rows.push(take);
+                left -= take;
+            }
+            return rows;
+        }
+
+        function renderPick(gd) {
+            const overlay = document.getElementById('pickOverlay');
+            const grid = document.getElementById('pickGrid');
+            const show = gd.phase && gd.phase.type === 'pick_player';
+            overlay.classList.toggle('visible', !!show);
+            if (!show) return;
+            const candidates = (gd.phase.data && gd.phase.data.candidates)
+                || gd.candidates
+                || [];
+            const sizes = pickRowSizes(candidates.length);
+            let idx = 0;
+            let html = '';
+            sizes.forEach((size) => {
+                html += '<div class="pick-row">';
+                for (let i = 0; i < size; i++) {
+                    const p = candidates[idx++];
+                    if (!p) continue;
+                    html += `<div class="pick-chip">
+                        <div class="av">${avatarHtml(p.avatar, p.name)}</div>
+                        <div class="nm">${escapeHtml(p.name || 'PLAYER')}</div>
+                    </div>`;
+                }
+                html += '</div>';
+            });
+            grid.innerHTML = html;
+        }
+
+        function renderComplete(gd) {
+            const overlay = document.getElementById('completeOverlay');
+            const show = gd.phase && gd.phase.type === 'complete';
+            overlay.classList.toggle('visible', !!show);
+            if (!show) return;
+            const d = gd.phase.data || {};
+            document.getElementById('completeName').textContent = d.playerName || (gd.player && gd.player.name) || 'PLAYER';
+            document.getElementById('completeScore').textContent = String(d.totalScore != null ? d.totalScore : gd.totalScore || 0);
+            document.getElementById('completeBadges').innerHTML = integrityBadges({
+                usedDebug: d.usedDebug,
+                usedCorrection: d.usedCorrection,
+                clean: d.clean
+            });
+            document.getElementById('completeSub').textContent = gd.persisted
+                ? 'Saved to the leaderboard'
+                : 'Saving…';
+        }
+
+        function applyGameData(state) {
+            const gd = state && state.gameData;
+            if (!gd || gd.gameType !== 'quick10') return;
+            lastKnown = state;
+
+            document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+            document.getElementById('fullLbOverlay').classList.toggle('visible', !!gd.leaderboardVisible
+                && !(gd.phase && (gd.phase.type === 'pick_player' || gd.phase.type === 'complete')));
+
+            renderHeader(gd);
+            renderLive(gd);
+            renderRounds(gd);
+            renderTop5(state);
+            renderFullLb(state);
+            renderPick(gd);
+            renderComplete(gd);
+        }
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== 'SYNC_STATE' || !data.state) return;
+            applyGameData(data.state);
+        });
+    </script>
+</body>
+</html>

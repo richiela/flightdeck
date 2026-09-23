@@ -1,0 +1,2653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>Derby</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            --page-bg: radial-gradient(circle at 50% 30%, #1bc4cf 0%, #0fa2ab 45%, #0a7a82 100%);
+            background: var(--page-bg);
+            color: #333;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        /* --- VINTAGE DOUBLE-BORDER MASTER FRAME --- */
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid rgba(255, 255, 255, 0.6); 
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none; 
+            z-index: 90;
+        }
+
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted rgba(255, 255, 255, 0.4); 
+            border-radius: 8px;
+        }
+
+        .window-game-title {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: #ffffff;
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            z-index: 100;
+            border-left: 4px solid #ffffff;
+            border-right: 4px solid #ffffff;
+        }
+
+        /* --- TOP ROUND HEADER PANEL --- */
+        .header-panel {
+            position: absolute;
+            top: 42px; left: 50%; 
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            z-index: 100;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+        .round-tracker {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+        }
+        .round-dots {
+            display: flex;
+            gap: 6px;
+        }
+        .round-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .round-dot.active {
+            background: #ffffff;
+        }
+
+        /* --- ARENA PANEL SETTINGS --- */
+        .arena {
+            position: relative; width: 100%; height: 100%;
+            box-sizing: border-box; display: flex;
+            align-items: center;
+            background: transparent;
+            padding: 65px 35px 35px 30px; 
+        }
+
+        /* Unified grid architecture */
+        .derby-grid-system {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        .derby-row {
+            display: flex;
+            align-items: flex-end;
+            width: 100%;
+            /* Default/max is 138px, matching --fc-avatar-inplay's 138px badge frame (was
+               112px, sized for the old 108px frame, so avatars — bottom-aligned — overflowed
+               upward into the row above). renderGrid() lowers --derby-row-height only when
+               the max player count (6) genuinely doesn't fit the available height — 2-5
+               players always get the full, correctly-spaced 138px. */
+            height: var(--derby-row-height, 138px);
+            flex-shrink: 0;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        /* --- SIDEBAR INDEPENDENT NODES --- */
+        /* Dart Counter layout: Left-Side and completely Vertical */
+        .sidebar-node {
+            display: flex;
+            align-items: center;
+            position: absolute;
+            left: 25px;
+            /* Stale translateY(-11px) removed — undocumented pre-avatar-size-bump nudge that
+               put the avatar/name-plate assembly on a different bottom offset (-25px net)
+               than .lane-track-line's plain bottom:14px, causing the line-vs-plate
+               misalignment. bottom:10px (was 14px) re-centers top/bottom row clearance —
+               verified equal via getBoundingClientRect() at both 2 and 6 players. */
+            bottom: 18px;
+            box-sizing: border-box;
+            justify-content: flex-end;
+            flex-shrink: 0;
+            z-index: 20;
+        }
+
+        .right-avatar-anchor {
+            position: relative;
+            width: calc(var(--fc-avatar-inplay) + 18px);
+            height: calc(var(--fc-avatar-inplay) + 18px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            flex-shrink: 0; z-index: 2;
+        }
+
+        .derby-row.color-0 .avatar-box { border-color: var(--fc-p0); }
+        .derby-row.color-0 .player-name-plate { background-color: var(--fc-p0); }
+        .derby-row.color-1 .avatar-box { border-color: var(--fc-p1); }
+        .derby-row.color-1 .player-name-plate { background-color: var(--fc-p1); }
+        .derby-row.color-2 .avatar-box { border-color: var(--fc-p2); }
+        .derby-row.color-2 .player-name-plate { background-color: var(--fc-p2); }
+        .derby-row.color-3 .avatar-box { border-color: var(--fc-p3); }
+        .derby-row.color-3 .player-name-plate { background-color: var(--fc-p3); }
+        .derby-row.color-4 .avatar-box { border-color: var(--fc-p4); }
+        .derby-row.color-4 .player-name-plate { background-color: var(--fc-p4); }
+        .derby-row.color-5 .avatar-box { border-color: var(--fc-p5); }
+        .derby-row.color-5 .player-name-plate { background-color: var(--fc-p5); }
+        .derby-row.color-6 .avatar-box { border-color: var(--fc-p6); }
+        .derby-row.color-6 .player-name-plate { background-color: var(--fc-p6); }
+        .derby-row.color-7 .avatar-box { border-color: var(--fc-p7); }
+        .derby-row.color-7 .player-name-plate { background-color: var(--fc-p7); }
+
+        /* FC_ACTIVE_RING: scale removed; ring/glow from shared-player-theme.css */
+
+        /* Box model/border/shadow come from shared-player-theme.css .fc-player-badge .avatar-box; only the transition is Derby-specific. */
+        .avatar-box { transition: all 0.2s ease; }
+
+        .player-name-plate {
+            /* Sized for the 1920x1080 @ 8ft standard — matches shared-player-theme.css's
+               .fc-player-badge .player-name-plate (was 0.65rem/75px, unreadable at distance).
+               z-index:7 keeps it above .fc-active-orbit's spinning bead (z-index:6), which
+               otherwise passes through this overlapping region and renders on top of it. */
+            position: absolute; bottom: -6px; z-index: 7; padding: 3px 9px; border-radius: 3px;
+            font-size: 1.1rem; font-weight: 900; color: #fff; text-transform: uppercase;
+            letter-spacing: 0.5px; white-space: nowrap; max-width: 110px; overflow: hidden;
+            text-overflow: ellipsis; border: 1.5px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Dart Counter layout: Left-Side and completely Vertical */
+        .sidebar-node .dart-dots {
+            display: flex; flex-direction: column; gap: var(--fc-dart-stack-gap); opacity: 0; transition: opacity 0.3s;
+            background: rgba(255, 255, 255, 0.15); border: 1.5px solid #fff;
+            padding: 6px 5px; border-radius: 8px; margin-right: 10px;
+            align-self: center;
+        }
+        .derby-row.active-turn .dart-dots,
+        .derby-row.active-turn .fc-duo-darts { opacity: 1; }
+        /* Doubles: duo badges + dart knobs (Derby only) */
+        .sidebar-node.is-duo {
+            /* Room for .fc-duo-darts (absolute, right:100%) + gap before left edge */
+            left: var(--derby-duo-left, 48px);
+        }
+        .sidebar-node.is-duo .right-avatar-anchor {
+            width: auto; height: auto;
+        }
+        .derby-row .fc-duo-row {
+            --fc-duo-pull: 14px; /* higher = closer avatars */
+            --fc-duo-dart-gap: 0px; /* ← dart counter distance (lower = closer to pair) */
+            position: relative;
+            justify-content: flex-start;
+            width: max-content;
+        }
+        /* Darts parked absolute to the LEFT of the pair so gap tweaks don't shift faces */
+        .derby-row .fc-duo-darts {
+            position: absolute;
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-right: var(--fc-duo-dart-gap);
+            margin-left: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            opacity: 0;
+            transition: opacity 0.3s, margin-right 0.15s;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1.5px solid #fff;
+            padding: 6px 5px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        /* .dot size/idle — must include .thrown or these beat shared .dot.thrown */
+        .derby-row .fc-duo-darts .dot,
+        .sidebar-node .dart-dots .dot,
+        .dot {
+            width: var(--fc-dart-dot-size);
+            height: var(--fc-dart-dot-size);
+            border-radius: 50%;
+            background: var(--fc-dart-dot-idle-bg);
+            border: var(--fc-dart-dot-idle-border);
+            box-sizing: border-box;
+        }
+        .derby-row .fc-duo-darts .dot.thrown,
+        .sidebar-node .dart-dots .dot.thrown,
+        .dot.thrown {
+            background: var(--fc-dart-thrown);
+            border-color: var(--fc-dart-thrown-glow);
+        }
+
+        /* --- STAGE / TRACK TRACKER GRID --- */
+        .race-lane {
+            position: absolute;
+            left: var(--derby-track-left, 200px);
+            right: 35px; 
+            height: 100%;
+            display: flex; 
+            align-items: flex-end;
+            box-sizing: border-box;
+        }
+        /* Doubles: inset duo for dart pill; shorten track so horses clear avatars.
+           --derby-track-left was 260px, stale from before the avatar-size bump (90px->
+           120px) -- the wider duo avatar pair (two full badges side by side) now reaches
+           to ~320px from the row's left edge, while the horse's own backward reach
+           (donkey-runner is 178px wide, centered via translateX(-50%) on its score
+           position) meant the tail rendered underneath the second avatar.
+           IMPORTANT: scoreToLeftPct() has its own built-in startPct:5 inset ("so horse
+           body/tail clears the avatar column at mark 0"), so score:0 never actually
+           renders at left:0% -- it renders at left:5%. Two earlier passes (395px, then
+           380px) were calibrated against a forced left:'0%' override, which isn't the
+           real initial state and don't reflect it -- that's why prod still looked wrong
+           after both. Measuring the REAL initial render (left:5%, no override) instead:
+           singles' real clearance is -2px (avatar and horse box edge basically touch);
+           doubles was +73px at 380px --derby-track-left, ~75px more than singles.
+           305px (380-75) matches singles' -2px clearance at the real initial position. */
+        #derbyGridContainer[data-doubles="1"] {
+            --derby-duo-left: 28px; /* ← room for dart pill (~22px) + gap + edge pad */
+            --derby-track-left: 305px; /* ← lower = longer track; raise = shorter track / more avatar room */
+        }
+
+        .lane-track-line {
+            /* Aligned so the LINE's bottom edge (not its top edge) matches the name
+               plate's bottom edge -- the line tucks up under the tag rather than
+               trailing below it. bottom:11px puts line.bottom exactly at plate.bottom. */
+            /* Starts near the horse's front (nose), not the lane's raw left edge -- the
+               horse (178px wide, centered via translateX(-50%) on its left%) straddles
+               the 0%-score mark, so its front sits ~half its own width to the right of
+               that mark. 80px lands just behind the nose. */
+            position: absolute; bottom: 12px; left: 105px; right: 0; height: 3px;
+            background-color: rgba(255,255,255,0.25);
+            z-index: 1;
+        }
+        .derby-row.active-turn .lane-track-line {
+            background-color: rgba(255, 235, 59, 0.6);
+            height: 4px;
+        }
+
+        .lane-tick {
+            position: absolute; width: 3px; height: 10px;
+            background-color: rgba(255,255,255,0.6); bottom: 10px;
+            transform: translateX(-50%);
+            z-index: 15;
+        }
+
+        /* Full Height Checkerboard Finish Line Wall with clean 30px spacing buffer */
+        .unified-finish-line {
+            position: absolute; 
+            right: 35px; 
+            top: 30px; bottom: 30px; width: 40px;
+            background-image: linear-gradient(45deg, #fff 25%, transparent 25%), 
+                              linear-gradient(-45deg, #fff 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #fff 75%), 
+                              linear-gradient(-45deg, transparent 75%, #fff 75%);
+            background-size: 14px 14px;
+            background-position: 0 0, 0 7px, 7px -7px, -7px 0px;
+            background-color: #111;
+            border: 3px solid #ffffff;
+            border-radius: 6px;
+            z-index: 5;
+            box-shadow: -4px 0 15px rgba(0,0,0,0.15);
+        }
+
+        /* --- HORSE RACERS --- */
+        .donkey-runner {
+            position: absolute;
+            bottom: 8px;
+            left: 0%;
+            width: 178px;
+            height: 98px;
+            transition: left 0.18s linear;
+            z-index: 12;
+            transform: translateX(-50%);
+            margin-left: 0;
+            pointer-events: none;
+        }
+
+        .horse-bob {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-origin: 50% 85%;
+        }
+
+        .horse-sprite {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center bottom;
+            display: block;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.32));
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        /* Number badge sits on the blank saddle cloth */
+        .horse-number {
+            position: absolute;
+            left: 42%;
+            top: 22%;
+            width: 40px;
+            height: 34px;
+            border-radius: 4px;
+            background: #fff;
+            border: 3px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.45rem;
+            font-weight: 900;
+            color: #111;
+            line-height: 1;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.28);
+            z-index: 2;
+        }
+
+        .color-0 .horse-number { border-color: var(--fc-p0); color: var(--fc-p0); }
+        .color-1 .horse-number { border-color: var(--fc-p1); color: var(--fc-p1); }
+        .color-2 .horse-number { border-color: var(--fc-p2); color: var(--fc-p2); }
+        .color-3 .horse-number { border-color: var(--fc-p3); color: var(--fc-p3); }
+        .color-4 .horse-number { border-color: var(--fc-p4); color: var(--fc-p4); }
+        .color-5 .horse-number { border-color: var(--fc-p5); color: var(--fc-p5); }
+        .color-6 .horse-number { border-color: var(--fc-p6); color: var(--fc-p6); }
+        .color-7 .horse-number { border-color: var(--fc-p7); color: var(--fc-p7); }
+
+        /* Idle nudge on active turn — bob wrapper only so left% stays stable */
+        .derby-row.active-turn .donkey-runner:not(.is-galloping) .horse-bob {
+            animation: derbyIdleBob 0.28s infinite alternate ease-in-out;
+        }
+
+        .donkey-runner.is-galloping .horse-bob {
+            animation: horseGallopStride 0.18s ease-in-out;
+        }
+
+        @keyframes derbyIdleBob {
+            from { transform: translateY(0); }
+            to { transform: translateY(-4px); }
+        }
+
+        @keyframes horseGallopStride {
+            0%   { transform: translateY(0) rotate(0deg); }
+            30%  { transform: translateY(-10px) rotate(-4deg); }
+            55%  { transform: translateY(-3px) rotate(3deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+
+        /* --- NEXT PLAYER: CALL TO THE POST --- */
+        .next-player-stage-takeover {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 500; pointer-events: none;
+            opacity: 0;
+            background: rgba(11, 80, 84, 0.0);
+            transition: background 0.15s ease;
+            box-sizing: border-box;
+            overflow: hidden;
+            gap: 18px;
+        }
+
+        .ctp-pennant {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 54px;
+            display: flex;
+            align-items: stretch;
+            z-index: 2;
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        .ctp-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #7AD7F0;
+            background-color: #7AD7F0;
+            border-bottom: 4px solid #fff;
+        }
+        .ctp-pennant-banner {
+            flex: 0 0 auto;
+            min-width: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 0 28px;
+            background: #7AD7F0;
+            border-bottom: 4px solid #fff;
+            color: #111;
+            font-size: 1.15rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+        .ctp-bugle {
+            width: 22px;
+            height: 14px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .ctp-bugle::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 4px;
+            width: 12px; height: 6px;
+            background: #111;
+            border-radius: 2px;
+        }
+        .ctp-bugle::after {
+            content: '';
+            position: absolute;
+            right: 0; top: 0;
+            width: 0; height: 0;
+            border-top: 7px solid transparent;
+            border-bottom: 7px solid transparent;
+            border-left: 12px solid #111;
+        }
+
+        .ctp-stage {
+            position: relative;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .ctp-eyebrow {
+            font-size: 1.35rem;
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: #7AD7F0;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+            opacity: 0;
+            transform: translateY(16px);
+        }
+
+        .ctp-saddle-frame {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 28px);
+            height: calc(var(--fc-avatar-overlay) + 28px);
+            border-radius: 50%;
+            background: #fff;
+            border: 5px solid #111;
+            box-shadow: 0 0 0 6px #7AD7F0, 0 12px 28px rgba(0,0,0,0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: scale(3); filter: blur(8px); opacity: 0;
+        }
+
+        .next-player-avatar-ring {
+            width: var(--fc-avatar-overlay);
+            height: var(--fc-avatar-overlay);
+            border-radius: 50%;
+            border: 4px solid #111;
+            background: #111;
+            overflow: hidden;
+        }
+        .next-player-avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+        .next-player-avatar-ring .initials {
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; font-weight: 900; color: #fff; background: #1bc4cf;
+        }
+
+        .ctp-number-cloth {
+            position: absolute;
+            right: -6px;
+            bottom: -2px;
+            min-width: 54px;
+            height: 54px;
+            padding: 0 10px;
+            border-radius: 10px;
+            background: #fff;
+            border: 4px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.7rem;
+            font-weight: 900;
+            color: #111;
+            box-shadow: 0 4px 0 #111, 0 8px 16px rgba(0,0,0,0.25);
+            z-index: 4;
+        }
+
+        .next-player-headline {
+            font-size: 4.4rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 3px;
+            text-shadow: 0 3px 0 #111, 0 0 24px rgba(122, 215, 240, 0.4);
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1;
+            text-align: center;
+            max-width: 90vw;
+            opacity: 0;
+            transform: scale(2.4); filter: blur(8px);
+        }
+
+        .next-player-subtext {
+            font-size: 1.45rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #7AD7F0;
+            letter-spacing: 5px;
+            margin-top: 4px;
+            opacity: 0;
+            transform: translateY(18px);
+            background: rgba(0,0,0,0.35);
+            border: 3px solid #7AD7F0;
+            padding: 8px 22px;
+            border-radius: 999px;
+        }
+
+        .ctp-track-stripe {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 18px;
+            background: repeating-linear-gradient(
+                90deg,
+                #7AD7F0 0 18px,
+                #111 18px 36px
+            );
+            opacity: 0;
+            transform: translateY(100%);
+            z-index: 2;
+        }
+
+        body.derby-animate-next .next-player-stage-takeover {
+            background: rgba(11, 80, 84, 0.78);
+            opacity: 1;
+            pointer-events: auto;
+            backdrop-filter: blur(3px);
+        }
+        body.derby-animate-next .ctp-pennant {
+            animation: ctpPennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        body.derby-animate-next .ctp-track-stripe {
+            animation: ctpStripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+        body.derby-animate-next .ctp-eyebrow {
+            animation: derbyNextSubReveal 0.35s ease 0.08s forwards;
+        }
+        body.derby-animate-next .ctp-saddle-frame {
+            animation: derbyNextSlam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.05s forwards;
+        }
+        body.derby-animate-next .next-player-headline {
+            animation: derbyNextSlam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.1s forwards;
+        }
+        body.derby-animate-next .next-player-subtext {
+            animation: derbyNextSubReveal 0.4s ease 0.18s forwards;
+        }
+        body.derby-animate-next .ctp-gate-lane {
+            animation: derbyNextSubReveal 0.3s ease 0.1s forwards;
+        }
+        body.derby-animate-next .ctp-gate-horse {
+            animation: ctpHorseToGate 1.55s cubic-bezier(0.33, 0.2, 0.25, 1) 0.2s both;
+        }
+        body.derby-animate-next .ctp-gate-horse img {
+            animation: ctpWalkStride 0.34s ease-in-out infinite;
+        }
+        body.derby-animate-next .arena { filter: blur(2px); }
+
+        .ctp-gate-lane {
+            position: relative;
+            width: 100%;
+            height: 118px;
+            margin: 2px 0 6px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%),
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.08) 0 28px,
+                    rgba(0,0,0,0.12) 28px 56px
+                ),
+                #2a1a12;
+            border: 4px solid #111;
+            border-radius: 8px;
+            box-shadow: inset 0 -10px 0 rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.35);
+            overflow: visible;
+            opacity: 0;
+        }
+        .ctp-gate-lane-rail {
+            position: absolute;
+            left: 56px; right: 0;
+            top: 10px;
+            height: 3px;
+            background: repeating-linear-gradient(90deg, #fff 0 12px, transparent 12px 22px);
+            opacity: 0.35;
+        }
+        .ctp-gate-lane-rail.bottom {
+            top: auto;
+            bottom: 14px;
+            opacity: 0.25;
+        }
+        .ctp-gate-lane-dirt {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 14px;
+            background: #1a100c;
+        }
+        .ctp-starting-gate {
+            position: absolute;
+            top: 0; bottom: 0; left: 0;
+            width: 54px;
+            z-index: 2;
+            display: flex;
+            gap: 5px;
+            padding: 8px 8px 14px;
+            box-sizing: border-box;
+            background: linear-gradient(180deg, #3a2a1a, #1a100c);
+            border-right: 3px solid #111;
+            box-shadow: inset 0 0 0 2px rgba(122, 215, 240, 0.5);
+        }
+        .ctp-starting-gate span {
+            flex: 1;
+            border-radius: 3px;
+            background: repeating-linear-gradient(
+                180deg,
+                #7AD7F0 0 10px,
+                #111 10px 20px
+            );
+            box-shadow: 0 0 0 1px #111;
+        }
+        .ctp-gate-horse {
+            position: absolute;
+            bottom: 8px;
+            left: calc(100% + 40px);
+            width: 178px;
+            height: 98px;
+            z-index: 4;
+        }
+        .ctp-gate-horse img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+            transform: scaleX(-1);
+            transform-origin: 50% 80%;
+        }
+        @keyframes ctpHorseToGate {
+            0% { left: calc(100% + 40px); }
+            /* Nose into / past the gate bars; horse stays on top via z-index */
+            100% { left: -28px; }
+        }
+        @keyframes ctpWalkStride {
+            0% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+            50% { transform: scaleX(-1) translateY(-5px) rotate(3deg); }
+            100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+        }
+
+        @keyframes derbyNextSlam {
+            0% { transform: scale(2.6); filter: blur(8px); opacity: 0; }
+            100% { transform: scale(1); filter: blur(0); opacity: 1; }
+        }
+        @keyframes derbyNextSubReveal {
+            0% { opacity: 0; transform: translateY(18px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes ctpPennantDrop {
+            0% { transform: translateY(-100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes ctpStripeUp {
+            0% { transform: translateY(100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        /* --- DOUBLE / TRIPLE: RACE CALL --- */
+        .derby-mult-takeover {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 550;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .derby-mult-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            animation: overlayFadeIn 0.18s ease forwards;
+        }
+        .derby-mult-takeover.mode-boost.active {
+            background: rgba(11, 80, 84, 0.86);
+        }
+        .derby-mult-takeover.mode-knock.active {
+            background: rgba(55, 12, 18, 0.88);
+        }
+        /* Single knock: same full-screen splash transition; quieter content (no horse lane) */
+        .derby-mult-takeover.mode-knock-soft.active {
+            background: rgba(55, 12, 18, 0.88);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-lane {
+            display: none;
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-stage {
+            gap: 12px;
+            width: min(640px, 92vw);
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-badge {
+            font-size: clamp(2.6rem, 6.5vw, 4rem);
+            letter-spacing: 5px;
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-delta-cloth {
+            min-width: 64px;
+            height: 58px;
+            font-size: 1.75rem;
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-name {
+            font-size: clamp(1.8rem, 4.5vw, 2.8rem);
+        }
+        .derby-mult-takeover.mode-knock-soft .mult-quip {
+            font-size: 1.15rem;
+        }
+
+        .mult-pennant {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 48px;
+            display: flex;
+            align-items: stretch;
+            z-index: 2;
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        .derby-mult-takeover.active .mult-pennant {
+            animation: ctpPennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        .mult-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #ffeb3b;
+            border-bottom: 4px solid #fff;
+        }
+        .derby-mult-takeover.mode-knock .mult-pennant-check {
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #ff5252;
+        }
+        .mult-pennant-banner {
+            flex: 0 0 auto;
+            min-width: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 24px;
+            background: #ffeb3b;
+            border-bottom: 4px solid #fff;
+            color: #111;
+            font-size: 1.05rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+        .derby-mult-takeover.mode-knock .mult-pennant-banner {
+            background: #111;
+            color: #ff5252;
+            border-bottom-color: #ff5252;
+        }
+
+        .mult-stage {
+            position: relative;
+            z-index: 3;
+            width: min(720px, 94vw);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .mult-callboard {
+            font-size: 0.95rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: #ffeb3b;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        .derby-mult-takeover.active .mult-callboard {
+            animation: derbyNextSubReveal 0.35s ease 0.05s forwards;
+        }
+        .derby-mult-takeover.mode-knock .mult-callboard { color: #ff8a80; }
+
+        .mult-badge-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .mult-badge {
+            font-size: clamp(3.2rem, 8vw, 5.2rem);
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: #fff;
+            line-height: 0.95;
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(255, 235, 59, 0.35);
+            opacity: 0;
+            transform: scale(2.2);
+            filter: blur(8px);
+        }
+        .derby-mult-takeover.active .mult-badge {
+            animation: derbyNextSlam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.06s forwards;
+        }
+        .derby-mult-takeover.mode-knock .mult-badge {
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(255, 82, 82, 0.4);
+        }
+
+        .mult-delta-cloth {
+            min-width: 72px;
+            height: 64px;
+            padding: 0 14px;
+            border-radius: 12px;
+            background: #fff;
+            border: 4px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #0a7a3e;
+            box-shadow: 0 0 0 4px #ffeb3b, 0 4px 0 #111, 0 10px 20px rgba(0,0,0,0.3);
+            opacity: 0;
+            transform: scale(2);
+            filter: blur(6px);
+            z-index: 3;
+        }
+        .derby-mult-takeover.active .mult-delta-cloth {
+            animation: derbyNextSlam 0.4s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .derby-mult-takeover.mode-knock .mult-delta-cloth {
+            color: #9e1b1b;
+            box-shadow: 0 0 0 4px #ff5252, 0 4px 0 #111, 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .mult-lane {
+            position: relative;
+            width: 100%;
+            height: 110px;
+            margin: 4px 0 8px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%),
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.08) 0 28px,
+                    rgba(0,0,0,0.12) 28px 56px
+                ),
+                #2a1a12;
+            border: 4px solid #111;
+            border-radius: 8px;
+            box-shadow: inset 0 -10px 0 rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.35);
+            overflow: hidden;
+            opacity: 0;
+        }
+        .derby-mult-takeover.active .mult-lane {
+            animation: derbyNextSubReveal 0.3s ease 0.1s forwards;
+        }
+        .mult-lane-rail {
+            position: absolute;
+            left: 0; right: 0;
+            top: 10px;
+            height: 3px;
+            background: repeating-linear-gradient(90deg, #fff 0 12px, transparent 12px 22px);
+            opacity: 0.35;
+        }
+        .mult-lane-rail.bottom {
+            top: auto;
+            bottom: 14px;
+            opacity: 0.25;
+        }
+        .mult-lane-dirt {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 14px;
+            background: #1a100c;
+        }
+
+        .mult-horse-run {
+            position: absolute;
+            bottom: 8px;
+            left: -140px;
+            width: 130px;
+            height: 88px;
+            z-index: 2;
+        }
+        .derby-mult-takeover.mode-boost.active .mult-horse-run {
+            animation: multHorseSurge 1.15s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both;
+        }
+        .derby-mult-takeover.mode-boost.mode-boost-triple.active .mult-horse-run {
+            transform-origin: 50% 80%;
+            animation: multHorseSurgeLoops 1.55s linear 0.12s both;
+        }
+        .derby-mult-takeover.mode-boost.mode-boost-triple .mult-lane {
+            overflow: visible;
+            height: 150px;
+        }
+        .derby-mult-takeover.mode-knock.active .mult-horse-run {
+            left: auto;
+            right: -140px;
+            animation: multHorseRecoil 1.15s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both;
+        }
+        .derby-mult-takeover.mode-knock.mode-knock-triple.active .mult-horse-run {
+            transform-origin: 50% 55%;
+            animation: multHorseRecoilFlip 1.2s cubic-bezier(0.25, 0.6, 0.2, 1) 0.15s both;
+        }
+        .mult-horse-run img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+            transform-origin: 50% 80%;
+        }
+        .derby-mult-takeover.mode-boost.active .mult-horse-run img {
+            animation: multStride 0.22s ease-in-out infinite;
+        }
+        .derby-mult-takeover.mode-boost.mode-boost-triple.active .mult-horse-run img {
+            /* Jump arc lives on the wrapper */
+            animation: none;
+        }
+        .derby-mult-takeover.mode-knock.active .mult-horse-run img {
+            /* Face forward (right) while sliding left = going backwards */
+            animation: multBackpedal 0.28s ease-in-out infinite alternate;
+        }
+        .derby-mult-takeover.mode-knock.mode-knock-triple.active .mult-horse-run img {
+            /* Flip lives on the wrapper; keep the sprite still */
+            animation: none;
+        }
+
+        .mult-rider-row {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            opacity: 0;
+            transform: translateY(16px);
+        }
+        .derby-mult-takeover.active .mult-rider-row {
+            animation: derbyNextSubReveal 0.35s ease 0.2s forwards;
+        }
+        .mult-saddle-frame {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) * 0.72 + 18px);
+            height: calc(var(--fc-avatar-overlay) * 0.72 + 18px);
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid #111;
+            box-shadow: 0 0 0 5px #ffeb3b, 0 10px 22px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .derby-mult-takeover.mode-knock .mult-saddle-frame {
+            box-shadow: 0 0 0 5px #ff5252, 0 10px 22px rgba(0,0,0,0.4);
+        }
+        .mult-avatar-ring {
+            width: calc(var(--fc-avatar-overlay) * 0.72);
+            height: calc(var(--fc-avatar-overlay) * 0.72);
+            border-radius: 50%;
+            border: 3px solid #111;
+            background: #111;
+            overflow: hidden;
+        }
+        .mult-avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+        .mult-avatar-ring .initials {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem; font-weight: 900; color: #fff; background: #1bc4cf;
+        }
+        .mult-number-cloth {
+            position: absolute;
+            right: -4px;
+            bottom: -2px;
+            min-width: 42px;
+            height: 42px;
+            padding: 0 8px;
+            border-radius: 8px;
+            background: #fff;
+            border: 3px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: #111;
+            box-shadow: 0 3px 0 #111;
+            z-index: 4;
+        }
+        .mult-copy {
+            text-align: left;
+            min-width: 0;
+        }
+        .mult-name {
+            margin: 0;
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #fff;
+            line-height: 1;
+            text-shadow: 0 3px 0 #111, 0 0 18px rgba(255, 235, 59, 0.25);
+        }
+        .derby-mult-takeover.mode-knock .mult-name {
+            text-shadow: 0 3px 0 #111, 0 0 18px rgba(255, 82, 82, 0.3);
+        }
+        .mult-quip {
+            margin: 8px 0 0;
+            font-size: 1.25rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #ffeb3b;
+        }
+        .derby-mult-takeover.mode-knock .mult-quip { color: #ff8a80; }
+        .mult-sub {
+            margin-top: 4px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.75);
+        }
+
+        .mult-track-stripe {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 18px;
+            background: repeating-linear-gradient(90deg, #ffeb3b 0 18px, #111 18px 36px);
+            opacity: 0;
+            transform: translateY(100%);
+            z-index: 2;
+        }
+        .derby-mult-takeover.mode-knock .mult-track-stripe {
+            background: repeating-linear-gradient(90deg, #ff5252 0 18px, #111 18px 36px);
+        }
+        .derby-mult-takeover.active .mult-track-stripe {
+            animation: ctpStripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+
+        @keyframes overlayFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes multHorseSurge {
+            0% { left: -140px; }
+            100% { left: calc(100% - 150px); }
+        }
+        /* Boost triple: two high looping jumps while charging forward.
+           left progresses monotonically to the finish so it never overshoots/pulls back. */
+        @keyframes multHorseSurgeLoops {
+            0% {
+                left: -140px;
+                transform: translateY(0) rotate(0deg);
+            }
+            6% {
+                left: calc(-140px + (100% - 10px) * 0.08);
+                transform: translateY(-10px) rotate(-4deg);
+            }
+            14% {
+                left: calc(-140px + (100% - 10px) * 0.18);
+                transform: translateY(-48px) rotate(-10deg);
+            }
+            22% {
+                left: calc(-140px + (100% - 10px) * 0.28);
+                transform: translateY(-68px) rotate(-8deg);
+            }
+            30% {
+                left: calc(-140px + (100% - 10px) * 0.38);
+                transform: translateY(-42px) rotate(-2deg);
+            }
+            38% {
+                left: calc(-140px + (100% - 10px) * 0.48);
+                transform: translateY(-4px) rotate(3deg);
+            }
+            44% {
+                left: calc(-140px + (100% - 10px) * 0.54);
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                left: calc(-140px + (100% - 10px) * 0.60);
+                transform: translateY(-12px) rotate(-5deg);
+            }
+            58% {
+                left: calc(-140px + (100% - 10px) * 0.70);
+                transform: translateY(-52px) rotate(-11deg);
+            }
+            66% {
+                left: calc(-140px + (100% - 10px) * 0.80);
+                transform: translateY(-72px) rotate(-9deg);
+            }
+            74% {
+                left: calc(-140px + (100% - 10px) * 0.88);
+                transform: translateY(-40px) rotate(-1deg);
+            }
+            84% {
+                left: calc(-140px + (100% - 10px) * 0.95);
+                transform: translateY(-6px) rotate(3deg);
+            }
+            100% {
+                left: calc(100% - 150px);
+                transform: translateY(0) rotate(0deg);
+            }
+        }
+        @keyframes multHorseRecoil {
+            0% { right: -140px; }
+            100% { right: calc(100% - 150px); }
+        }
+        @keyframes multHorseRecoilFlip {
+            0% {
+                right: -140px;
+                transform: rotate(0deg) translateY(0);
+            }
+            45% {
+                transform: rotate(-180deg) translateY(-18px);
+            }
+            100% {
+                right: calc(100% - 150px);
+                transform: rotate(-360deg) translateY(0);
+            }
+        }
+        @keyframes multStride {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(-5deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+        @keyframes multBackpedal {
+            from { transform: translateY(0) rotate(3deg); }
+            to { transform: translateY(-5px) rotate(-4deg); }
+        }
+
+        /* --- FINDS THE POST --- */
+        .past-post-takeover {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 560;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .past-post-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            background: rgba(8, 55, 48, 0.88);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            animation: overlayFadeIn 0.2s ease forwards;
+        }
+        .pp-pennant {
+            position: absolute; top: 0; left: 0; right: 0; height: 48px;
+            display: flex; align-items: stretch; z-index: 2;
+            transform: translateY(-100%); opacity: 0;
+        }
+        .past-post-takeover.active .pp-pennant {
+            animation: ctpPennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        .pp-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #7CFFB2;
+            border-bottom: 4px solid #fff;
+        }
+        .pp-pennant-banner {
+            flex: 0 0 auto; min-width: 280px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 28px; background: #7CFFB2; border-bottom: 4px solid #fff;
+            color: #111; font-size: 1.1rem; font-weight: 900; letter-spacing: 4px;
+            text-transform: uppercase; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+        .pp-stage {
+            position: relative; z-index: 3;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            width: min(640px, 94vw);
+        }
+        .pp-callboard {
+            font-size: 0.95rem; font-weight: 900; letter-spacing: 5px;
+            text-transform: uppercase; color: #7CFFB2;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+            opacity: 0; transform: translateY(12px);
+        }
+        .past-post-takeover.active .pp-callboard {
+            animation: derbyNextSubReveal 0.35s ease 0.05s forwards;
+        }
+        .pp-badge {
+            width: 100%;
+            font-size: clamp(2.6rem, 7vw, 4.4rem); font-weight: 900;
+            letter-spacing: 4px; text-transform: uppercase; color: #fff;
+            line-height: 0.95;
+            text-align: center;
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(124, 255, 178, 0.35);
+            opacity: 0; transform: scale(2.2); filter: blur(8px);
+        }
+        .past-post-takeover.active .pp-badge {
+            animation: derbyNextSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.08s forwards;
+        }
+        .pp-finish-lane {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            margin: 2px 0 4px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%),
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.08) 0 28px,
+                    rgba(0,0,0,0.12) 28px 56px
+                ),
+                #2a1a12;
+            border: 4px solid #111;
+            border-radius: 8px;
+            box-shadow: inset 0 -10px 0 rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.35);
+            overflow: visible;
+            opacity: 0;
+        }
+        .past-post-takeover.active .pp-finish-lane {
+            animation: derbyNextSubReveal 0.3s ease 0.1s forwards;
+        }
+        .pp-finish-lane-rail {
+            position: absolute;
+            left: 0; right: 48px;
+            top: 10px;
+            height: 3px;
+            background: repeating-linear-gradient(90deg, #fff 0 12px, transparent 12px 22px);
+            opacity: 0.35;
+        }
+        .pp-finish-lane-rail.bottom {
+            top: auto;
+            bottom: 14px;
+            opacity: 0.25;
+        }
+        .pp-finish-lane-dirt {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 14px;
+            background: #1a100c;
+        }
+        .pp-finish-post {
+            position: absolute;
+            top: 0; bottom: 0; right: 0;
+            width: 42px;
+            z-index: 2;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) 0 0 / 14px 14px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) 0 0 / 14px 14px,
+                linear-gradient(45deg, transparent 75%, #111 75%) 0 0 / 14px 14px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) 0 0 / 14px 14px,
+                #fff;
+            border-left: 3px solid #111;
+            box-shadow: inset 0 0 0 2px rgba(124, 255, 178, 0.55);
+        }
+        .pp-finish-horse {
+            position: absolute;
+            bottom: 8px;
+            left: -140px;
+            width: 130px;
+            height: 88px;
+            z-index: 4;
+        }
+        .past-post-takeover.active .pp-finish-horse {
+            animation: ppHorseCrossWire 1.25s cubic-bezier(0.22, 0.7, 0.2, 1) 0.18s both;
+        }
+        .pp-finish-horse img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+            transform-origin: 50% 80%;
+        }
+        .past-post-takeover.active .pp-finish-horse img {
+            animation: multStride 0.22s ease-in-out infinite;
+        }
+        @keyframes ppHorseCrossWire {
+            0% { left: -140px; }
+            /* Nose clears past the checkered post (post is 42px; horse ~130px) */
+            100% { left: calc(100% - 58px); }
+        }
+        .pp-saddle-frame {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 24px);
+            height: calc(var(--fc-avatar-overlay) + 24px);
+            border-radius: 50%; background: #fff; border: 5px solid #111;
+            box-shadow: 0 0 0 6px #7CFFB2, 0 14px 30px rgba(0,0,0,0.45);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transform: scale(2.4); filter: blur(8px);
+        }
+        .past-post-takeover.active .pp-saddle-frame {
+            animation: derbyNextSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .pp-avatar-ring {
+            width: var(--fc-avatar-overlay); height: var(--fc-avatar-overlay);
+            border-radius: 50%; border: 4px solid #111; background: #111; overflow: hidden;
+        }
+        .pp-avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+        .pp-avatar-ring .initials {
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; font-weight: 900; color: #fff; background: #1bc4cf;
+        }
+        .pp-number-cloth {
+            position: absolute; right: -4px; bottom: -2px;
+            min-width: 48px; height: 48px; padding: 0 8px; border-radius: 8px;
+            background: #fff; border: 4px solid #111;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.45rem; font-weight: 900; color: #111;
+            box-shadow: 0 3px 0 #111; z-index: 4;
+        }
+        .pp-name {
+            margin: 0; font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 900;
+            letter-spacing: 2px; text-transform: uppercase; color: #fff;
+            text-shadow: 0 3px 0 #111, 0 0 18px rgba(124, 255, 178, 0.3);
+            opacity: 0; transform: translateY(16px);
+        }
+        .past-post-takeover.active .pp-name {
+            animation: derbyNextSubReveal 0.35s ease 0.18s forwards;
+        }
+        .pp-sub {
+            font-size: 1.15rem; font-weight: 900; letter-spacing: 3px;
+            text-transform: uppercase; color: #7CFFB2;
+            background: rgba(0,0,0,0.35); border: 3px solid #7CFFB2;
+            padding: 8px 20px; border-radius: 999px;
+            opacity: 0; transform: translateY(16px);
+        }
+        .past-post-takeover.active .pp-sub {
+            animation: derbyNextSubReveal 0.35s ease 0.24s forwards;
+        }
+        .pp-track-stripe {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 18px;
+            background: repeating-linear-gradient(90deg, #7CFFB2 0 18px, #111 18px 36px);
+            opacity: 0; transform: translateY(100%); z-index: 2;
+        }
+        .past-post-takeover.active .pp-track-stripe {
+            animation: ctpStripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+
+        /* --- WINNER'S CIRCLE --- */
+        .match-winner-takeover {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 600;
+            box-sizing: border-box;
+            overflow: hidden;
+            background: rgba(11, 80, 84, 0.0);
+        }
+        .match-winner-takeover.active {
+            display: flex;
+            background: rgba(11, 80, 84, 0.88);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            animation: overlayFadeIn 0.25s ease forwards;
+        }
+
+        .win-pennant {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 48px;
+            display: flex;
+            align-items: stretch;
+            z-index: 2;
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        .match-winner-takeover.active .win-pennant {
+            animation: ctpPennantDrop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards;
+        }
+        .win-pennant-check {
+            flex: 1;
+            background:
+                linear-gradient(45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, #111 25%, transparent 25%) -10px 0 / 20px 20px,
+                linear-gradient(45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                linear-gradient(-45deg, transparent 75%, #111 75%) -10px 0 / 20px 20px,
+                #ffeb3b;
+            border-bottom: 4px solid #fff;
+        }
+        .win-pennant-banner {
+            flex: 0 0 auto;
+            min-width: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 28px;
+            background: #ffeb3b;
+            border-bottom: 4px solid #fff;
+            color: #111;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        }
+
+        .win-stage {
+            position: relative;
+            z-index: 4;
+            width: min(640px, 94vw);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        .win-callboard {
+            font-size: 0.95rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: #ffeb3b;
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        .match-winner-takeover.active .win-callboard {
+            animation: derbyNextSubReveal 0.35s ease 0.05s forwards;
+        }
+        .win-headline {
+            margin: 0;
+            font-size: clamp(2.6rem, 7vw, 4.6rem);
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #fff;
+            text-align: center;
+            line-height: 1;
+            text-shadow: 0 4px 0 #111, 0 0 28px rgba(255, 235, 59, 0.35);
+            opacity: 0;
+            transform: scale(2.2);
+            filter: blur(8px);
+        }
+        .match-winner-takeover.active .win-headline {
+            animation: derbyNextSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.08s forwards;
+        }
+
+        .win-saddle-frame {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) + 24px);
+            height: calc(var(--fc-avatar-overlay) + 24px);
+            border-radius: 50%;
+            background: #fff;
+            border: 5px solid #111;
+            box-shadow: 0 0 0 6px #ffeb3b, 0 14px 30px rgba(0,0,0,0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: scale(2.4);
+            filter: blur(8px);
+        }
+        .match-winner-takeover.active .win-saddle-frame {
+            animation: derbyNextSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .win-avatar-ring {
+            width: var(--fc-avatar-overlay);
+            height: var(--fc-avatar-overlay);
+            border-radius: 50%;
+            border: 4px solid #111;
+            background: #111;
+            overflow: hidden;
+        }
+        .win-avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+        .win-avatar-ring .initials {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; font-weight: 900; color: #fff; background: #1bc4cf;
+        }
+        .win-laurel {
+            position: absolute;
+            inset: -10px;
+            border-radius: 50%;
+            border: 3px dashed #ffeb3b;
+            animation: carnivalSpin 8s linear infinite;
+            pointer-events: none;
+        }
+        .win-avatar-row {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            max-width: 92vw;
+        }
+        .match-winner-takeover.mode-draw .win-saddle-frame { display: none; }
+        .match-winner-takeover.mode-draw .win-avatar-row { display: flex; }
+        .win-draw-saddle {
+            position: relative;
+            width: calc(var(--fc-avatar-overlay) * 0.72 + 18px);
+            height: calc(var(--fc-avatar-overlay) * 0.72 + 18px);
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid #111;
+            box-shadow: 0 0 0 5px #ffeb3b, 0 10px 22px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: scale(1.6);
+            filter: blur(6px);
+        }
+        .match-winner-takeover.mode-draw.active .win-draw-saddle {
+            animation: derbyNextSlam 0.45s cubic-bezier(0.15, 0.85, 0.3, 1.1) 0.12s forwards;
+        }
+        .win-draw-saddle .win-avatar-ring {
+            width: calc(var(--fc-avatar-overlay) * 0.72);
+            height: calc(var(--fc-avatar-overlay) * 0.72);
+        }
+        .win-badge {
+
+            margin-top: 4px;
+            background: #ffeb3b;
+            border: 4px solid #111;
+            color: #111;
+            font-size: 1.25rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            padding: 10px 28px;
+            border-radius: 999px;
+            box-shadow: 0 5px 0 #111;
+            opacity: 0;
+            transform: translateY(16px);
+        }
+        .match-winner-takeover.active .win-badge {
+            animation: derbyNextSubReveal 0.4s ease 0.22s forwards;
+        }
+
+        /* Champagne burst */
+        .champagne-burst {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 3;
+            overflow: hidden;
+        }
+        .champ-bottle {
+            position: absolute;
+            bottom: 7%;
+            width: 52px;
+            height: 150px;
+            opacity: 0;
+            transform-origin: 50% 100%;
+            filter: drop-shadow(0 10px 16px rgba(0,0,0,0.4));
+        }
+        .champ-bottle.left {
+            left: 14%;
+            transform: rotate(-16deg);
+            --cork-x: -80px;
+            --cork-spin: -640deg;
+        }
+        .champ-bottle.right {
+            right: 14%;
+            transform: rotate(16deg);
+            --cork-x: 80px;
+            --cork-spin: 640deg;
+        }
+
+        .champ-cork {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 14px;
+            height: 12px;
+            margin-left: -7px;
+            border-radius: 3px 3px 1px 1px;
+            background: linear-gradient(90deg, #c4a574, #e8d5a8 45%, #a88955);
+            box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.35);
+            z-index: 8;
+            transform-origin: 50% 100%;
+            will-change: transform, opacity;
+        }
+        .champ-foil {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            width: 22px;
+            height: 28px;
+            margin-left: -11px;
+            border-radius: 4px 4px 2px 2px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.35), transparent 40%),
+                linear-gradient(90deg, #6b1020, #b4283d 40%, #8b1e2d 60%, #5a0e18);
+            box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25);
+            z-index: 4;
+        }
+        .champ-foil::after {
+            content: '';
+            position: absolute;
+            left: 3px; right: 3px; bottom: 6px;
+            height: 3px;
+            border-radius: 1px;
+            background: rgba(255, 215, 120, 0.55);
+        }
+        .champ-neck {
+            position: absolute;
+            top: 34px;
+            left: 50%;
+            width: 16px;
+            height: 34px;
+            margin-left: -8px;
+            background:
+                linear-gradient(90deg, rgba(255,255,255,0.2), transparent 35%, transparent 65%, rgba(0,0,0,0.25)),
+                linear-gradient(180deg, #1e4d32, #2f6b48);
+            border-radius: 3px 3px 0 0;
+            z-index: 3;
+        }
+        .champ-body {
+            position: absolute;
+            top: 64px;
+            left: 50%;
+            width: 48px;
+            height: 86px;
+            margin-left: -24px;
+            border-radius: 40% 40% 28% 28% / 18% 18% 42% 42%;
+            background:
+                linear-gradient(105deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.08) 22%, transparent 40%),
+                linear-gradient(90deg, #0f2a1c, #1f5536 28%, #2d7a4d 52%, #1a452c 78%, #0c2216);
+            box-shadow: inset -6px 0 10px rgba(0,0,0,0.35), inset 4px 0 8px rgba(255,255,255,0.08);
+            z-index: 2;
+            overflow: hidden;
+        }
+        .champ-body::before {
+            /* shoulder flare into neck */
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            width: 28px;
+            height: 18px;
+            margin-left: -14px;
+            border-radius: 50% 50% 0 0;
+            background: linear-gradient(180deg, #1f5536, #184830);
+        }
+        .champ-label {
+            position: absolute;
+            top: 28px;
+            left: 6px;
+            right: 6px;
+            height: 34px;
+            border-radius: 3px;
+            background:
+                linear-gradient(180deg, #f3e6b8, #d4b45a 55%, #b8923a);
+            border: 1px solid rgba(80, 50, 10, 0.45);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+            z-index: 2;
+        }
+        .champ-label::before {
+            content: '';
+            position: absolute;
+            top: 6px; left: 5px; right: 5px;
+            height: 2px;
+            background: rgba(90, 40, 20, 0.35);
+            border-radius: 1px;
+        }
+        .champ-label::after {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin-left: -8px;
+            border-radius: 50%;
+            border: 2px solid rgba(90, 40, 20, 0.4);
+            box-sizing: border-box;
+        }
+        .champ-mouth {
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            margin-left: -2px;
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        .match-winner-takeover.active .champ-bottle.left {
+            animation: champBottlePopLeft 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15) 0.12s forwards;
+        }
+        .match-winner-takeover.active .champ-bottle.right {
+            animation: champBottlePopRight 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15) 0.18s forwards;
+        }
+        /* Bottle lands → cork rockets off → then spray */
+        .match-winner-takeover.active .champ-bottle.left .champ-cork {
+            animation: champCorkShoot 0.38s cubic-bezier(0.12, 0.75, 0.2, 1) 0.68s forwards;
+        }
+        .match-winner-takeover.active .champ-bottle.right .champ-cork {
+            animation: champCorkShoot 0.38s cubic-bezier(0.12, 0.75, 0.2, 1) 0.76s forwards;
+        }
+
+        .champ-spray {
+            position: absolute;
+            top: 0; left: 0;
+            width: 8px;
+            height: 8px;
+            margin-left: -4px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: #fff8d6;
+            opacity: 0;
+            box-shadow: 0 0 8px rgba(255, 235, 59, 0.7);
+            z-index: 7;
+        }
+        .match-winner-takeover.active .champ-spray {
+            animation: champSpray var(--dur, 1.4s) ease-out var(--delay, 0s) infinite;
+        }
+        .champ-foam {
+            position: absolute;
+            top: 0; left: 0;
+            width: 18px;
+            height: 18px;
+            margin-left: -9px;
+            margin-top: -9px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #fff, #ffe082 70%, transparent 72%);
+            opacity: 0;
+            z-index: 7;
+        }
+        .match-winner-takeover.active .champ-foam {
+            animation: champFoam var(--dur, 1.6s) ease-out var(--delay, 0s) infinite;
+        }
+
+        .win-track-stripe {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            height: 18px;
+            background: repeating-linear-gradient(90deg, #ffeb3b 0 18px, #111 18px 36px);
+            opacity: 0;
+            transform: translateY(100%);
+            z-index: 2;
+        }
+        .match-winner-takeover.active .win-track-stripe {
+            animation: ctpStripeUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) 0.05s forwards;
+        }
+
+        @keyframes champBottlePopLeft {
+            0% { opacity: 0; transform: translateY(36px) rotate(-16deg) scale(0.75); }
+            70% { opacity: 1; transform: translateY(-6px) rotate(-18deg) scale(1.04); }
+            100% { opacity: 1; transform: translateY(0) rotate(-16deg) scale(1); }
+        }
+        @keyframes champBottlePopRight {
+            0% { opacity: 0; transform: translateY(36px) rotate(16deg) scale(0.75); }
+            70% { opacity: 1; transform: translateY(-6px) rotate(18deg) scale(1.04); }
+            100% { opacity: 1; transform: translateY(0) rotate(16deg) scale(1); }
+        }
+        @keyframes champCorkShoot {
+            0% {
+                transform: translate(0, 0) rotate(0deg) scale(1);
+                opacity: 1;
+            }
+            12% {
+                transform: translate(calc(var(--cork-x) * 0.08), -18px) rotate(calc(var(--cork-spin) * 0.08)) scale(1.08);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--cork-x), -560px) rotate(var(--cork-spin)) scale(0.85);
+                opacity: 0;
+            }
+        }
+        @keyframes champSpray {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0) scale(0.6);
+            }
+            12% { opacity: 1; }
+            100% {
+                opacity: 0;
+                transform: translate(var(--tx, 40px), var(--ty, -220px)) scale(0.2);
+            }
+        }
+        @keyframes champFoam {
+            0% {
+                opacity: 0;
+                transform: translate(0, 0) scale(0.4);
+            }
+            15% { opacity: 0.95; }
+            100% {
+                opacity: 0;
+                transform: translate(var(--tx, -30px), var(--ty, -180px)) scale(1.4);
+            }
+        }
+        @keyframes carnivalSpin {
+            to { transform: rotate(360deg); }
+        }
+    
+        /* --- HELP OVERLAY --- */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(8, 70, 76, 0.95);
+            border: 2px solid rgba(255,255,255,0.85);
+            border-radius: 2px; padding: 20px 40px;
+            width: 520px; max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.55); z-index: 10000;
+            display: none; text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: helpFadeIn 0.2s ease; }
+        .help-overlay-board h3 {
+            color: #fff; margin-top: 0;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .help-overlay-board p {
+            font-size: 0.95rem; color: #ddd; line-height: 1.5; text-align: left;
+        }
+        @keyframes helpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ===== ROUND ANNOUNCE — post time / starting gates ===== */
+        .round-announce-takeover {
+            position: fixed; inset: 0; z-index: 550;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(180deg, #0b6e74 0%, #08555a 45%, #053a3e 100%);
+            opacity: 0; pointer-events: none;
+        }
+        .round-announce-takeover.active { opacity: 1; pointer-events: auto; }
+        .ra-track-stripe {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
+            background: repeating-linear-gradient(90deg, #111 0 28px, #f5f5f5 28px 56px);
+            transform: scaleX(0);
+        }
+        .round-announce-takeover.active .ra-track-stripe {
+            animation: derbyRaStripe 0.5s ease 0.15s forwards;
+        }
+        @keyframes derbyRaStripe { to { transform: scaleX(1); } }
+        .ra-gates {
+            position: absolute; inset: 0; display: flex; pointer-events: none;
+        }
+        .ra-gate {
+            flex: 1; background: linear-gradient(90deg, rgba(8,40,42,0.92), rgba(8,40,42,0.75));
+            border-right: 2px solid rgba(255,235,59,0.25);
+            transform-origin: left center;
+        }
+        .ra-gate.right { transform-origin: right center; border-right: none; border-left: 2px solid rgba(255,235,59,0.25); }
+        .round-announce-takeover.active .ra-gate.left {
+            animation: derbyGateL 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards;
+        }
+        .round-announce-takeover.active .ra-gate.right {
+            animation: derbyGateR 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards;
+        }
+        @keyframes derbyGateL { to { transform: perspective(600px) rotateY(-72deg); opacity: 0.15; } }
+        @keyframes derbyGateR { to { transform: perspective(600px) rotateY(72deg); opacity: 0.15; } }
+        .ra-board {
+            position: relative; z-index: 2;
+            width: min(680px, 90vw);
+            background: #132a2c;
+            border: 4px solid #ffeb3b;
+            border-radius: 10px;
+            padding: 34px 40px 28px;
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.35), 0 24px 60px rgba(0,0,0,0.45);
+            text-align: center;
+            transform: translateY(24px); opacity: 0;
+        }
+        .round-announce-takeover.active .ra-board {
+            animation: derbyRaBoard 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) 0.28s forwards;
+        }
+        @keyframes derbyRaBoard { to { opacity: 1; transform: translateY(0); } }
+        .ra-pennant {
+            display: inline-block; background: #ffeb3b; color: #132a2c;
+            font-weight: 900; letter-spacing: 4px; padding: 6px 16px;
+            font-size: 0.85rem; margin-bottom: 12px;
+            transform: rotate(-2deg);
+        }
+        .ra-eyebrow {
+            color: #9ee7ec; letter-spacing: 6px; font-weight: 800; font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+        .ra-title {
+            margin: 0; color: #fff; font-size: clamp(3rem, 6.5vw, 4.8rem);
+            font-weight: 900; letter-spacing: 3px; line-height: 0.95;
+            text-shadow: 0 4px 0 rgba(0,0,0,0.35);
+        }
+        .ra-of {
+            color: rgba(255,235,59,0.85); font-weight: 800; letter-spacing: 3px;
+            margin: 8px 0 14px; font-size: 1.05rem;
+        }
+        .ra-tags { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+        .ra-tag {
+            border: 2px solid #ffeb3b; color: #ffeb3b; padding: 6px 12px;
+            font-weight: 900; letter-spacing: 2px; font-size: 0.8rem;
+        }
+        .ra-tag.hot {
+            background: #ffeb3b; color: #132a2c;
+            animation: derbyRaHot 1s ease-in-out infinite;
+        }
+        @keyframes derbyRaHot {
+            0%,100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .ra-sub { margin-top: 14px; color: rgba(255,255,255,0.7); font-weight: 700; }
+        .round-announce-takeover.mode-final .ra-board {
+            border-color: #ff8a80;
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.35), 0 0 40px rgba(255,100,90,0.25);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="master-frame">
+        <div class="window-game-title">Derby</div>
+    </div>
+
+    <div class="header-panel">
+        <div class="round-tracker">
+            <span>ROUND</span>
+            <div class="round-dots" id="roundDotsContainer">
+                <div class="round-dot active"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+                <div class="round-dot"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="round-announce-takeover" id="roundAnnounceScreen" aria-hidden="true">
+        <div class="ra-gates" aria-hidden="true">
+            <div class="ra-gate left"></div>
+            <div class="ra-gate right"></div>
+        </div>
+        <div class="ra-board">
+            <div class="ra-pennant" id="raPennant">POST TIME</div>
+            <div class="ra-eyebrow" id="raEyebrow">POST TIME</div>
+            <h1 class="ra-title" id="raTitle">ROUND 1</h1>
+            <div class="ra-of" id="raOf">FURLONG 1 OF 8</div>
+            <div class="ra-tags" id="raTags"></div>
+            <div class="ra-sub" id="raSub"></div>
+        </div>
+        <div class="ra-track-stripe" aria-hidden="true"></div>
+    </div>
+
+    <div class="next-player-stage-takeover" id="nextPlayerStagePage">
+        <div class="ctp-pennant">
+            <div class="ctp-pennant-check"></div>
+            <div class="ctp-pennant-banner">
+                <span class="ctp-bugle" aria-hidden="true"></span>
+                Call To The Post
+                <span class="ctp-bugle" aria-hidden="true"></span>
+            </div>
+            <div class="ctp-pennant-check"></div>
+        </div>
+
+        <div class="ctp-stage">
+            <div class="ctp-eyebrow">Next Up</div>
+            <div class="ctp-gate-lane">
+                <div class="ctp-gate-lane-rail"></div>
+                <div class="ctp-gate-lane-rail bottom"></div>
+                <div class="ctp-gate-lane-dirt"></div>
+                <div class="ctp-starting-gate" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </div>
+                <div class="ctp-gate-horse">
+                    <img src="../assets/derby/horse-racer.png" alt="">
+                </div>
+            </div>
+            <div class="ctp-saddle-frame">
+                <div class="next-player-avatar-ring" id="nextPlayerAvatarSlot"></div>
+                <div class="ctp-number-cloth" id="nextPlayerNumberCloth">20</div>
+            </div>
+            <h1 class="next-player-headline" id="nextPlayerNameBanner">PLAYER</h1>
+            <div class="next-player-subtext">To The Oche</div>
+        </div>
+
+        <div class="ctp-track-stripe"></div>
+    </div>
+
+    <div class="derby-mult-takeover" id="derbyMultScreen">
+        <div class="mult-pennant">
+            <div class="mult-pennant-check"></div>
+            <div class="mult-pennant-banner" id="derbyMultPennant">Stewards' Call</div>
+            <div class="mult-pennant-check"></div>
+        </div>
+
+        <div class="mult-stage">
+            <div class="mult-callboard" id="derbyMultEyebrow">Length Gained</div>
+            <div class="mult-badge-row">
+                <div class="mult-badge" id="derbyMultBadge">DOUBLE!</div>
+                <div class="mult-delta-cloth" id="derbyMultSteps">+2</div>
+            </div>
+
+            <div class="mult-lane">
+                <div class="mult-lane-rail"></div>
+                <div class="mult-lane-rail bottom"></div>
+                <div class="mult-lane-dirt"></div>
+                <div class="mult-horse-run">
+                    <img src="../assets/derby/horse-racer.png" alt="">
+                </div>
+            </div>
+
+            <div class="mult-rider-row">
+                <div class="mult-saddle-frame">
+                    <div class="mult-avatar-ring" id="derbyMultAvatarSlot"></div>
+                    <div class="mult-number-cloth" id="derbyMultNumber">20</div>
+                </div>
+                <div class="mult-copy">
+                    <h1 class="mult-name" id="derbyMultName">PLAYER</h1>
+                    <p class="mult-quip" id="derbyMultQuip">Full Gallop!</p>
+                    <div class="mult-sub" id="derbyMultSub">Charging the rail</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mult-track-stripe"></div>
+    </div>
+
+    <div class="past-post-takeover" id="pastPostScreen">
+        <div class="pp-pennant">
+            <div class="pp-pennant-check"></div>
+            <div class="pp-pennant-banner">Finish Line</div>
+            <div class="pp-pennant-check"></div>
+        </div>
+        <div class="pp-stage">
+            <div class="pp-callboard">Official Result</div>
+            <div class="pp-badge">Finds The Post!</div>
+            <div class="pp-finish-lane">
+                <div class="pp-finish-lane-rail"></div>
+                <div class="pp-finish-lane-rail bottom"></div>
+                <div class="pp-finish-lane-dirt"></div>
+                <div class="pp-finish-post" aria-hidden="true"></div>
+                <div class="pp-finish-horse">
+                    <img src="../assets/derby/horse-racer.png" alt="">
+                </div>
+            </div>
+            <div class="pp-saddle-frame">
+                <div class="pp-avatar-ring" id="pastPostAvatarSlot"></div>
+                <div class="pp-number-cloth" id="pastPostNumber">20</div>
+            </div>
+            <h1 class="pp-name" id="pastPostName">PLAYER</h1>
+            <div class="pp-sub">Safe At The Wire</div>
+        </div>
+        <div class="pp-track-stripe"></div>
+    </div>
+
+    <div class="match-winner-takeover" id="matchWinnerScreen" style="--fd-winner-video-border: #ffeb3b;">
+        <div class="win-pennant">
+            <div class="win-pennant-check"></div>
+            <div class="win-pennant-banner">Winner's Circle</div>
+            <div class="win-pennant-check"></div>
+        </div>
+
+        <div class="champagne-burst" id="victoryConfetti" aria-hidden="true">
+            <div class="champ-bottle left">
+                <div class="champ-mouth"></div>
+                <div class="champ-cork"></div>
+                <div class="champ-foil"></div>
+                <div class="champ-neck"></div>
+                <div class="champ-body"><div class="champ-label"></div></div>
+            </div>
+            <div class="champ-bottle right">
+                <div class="champ-mouth"></div>
+                <div class="champ-cork"></div>
+                <div class="champ-foil"></div>
+                <div class="champ-neck"></div>
+                <div class="champ-body"><div class="champ-label"></div></div>
+            </div>
+        </div>
+
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="win-stage">
+                    <div class="win-callboard">Photo Finish</div>
+                    <h1 class="win-headline" id="winnerNameText">CHAMPION</h1>
+                    <div class="win-saddle-frame" id="winnerSingleFrame">
+                        <div class="win-laurel" aria-hidden="true"></div>
+                        <div class="win-avatar-ring" id="winnerAvatarSlot"></div>
+                    </div>
+                    <div class="win-avatar-row" id="winnerAvatarRow"></div>
+                    <div class="win-badge" id="winnerBadge">First Past The Post</div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+
+        <div class="win-track-stripe"></div>
+    </div>
+
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Derby Rules</h3>
+        <p>• Each player is assigned a target number on the board.</p>
+        <p>• Hit your own number to move forward (singles 1, doubles 2, triples 3).</p>
+        <p>• Hit another player’s number to knock them back the same amount.</p>
+        <p>• Finished horses can’t be knocked backward.</p>
+        <p>• First past the post opens the finish — remaining players finish the rotation.</p>
+        <p>• Match ends after 8 rounds, or when the finish rotation completes.</p>
+    </div>
+
+    <div class="arena">
+        <div class="derby-grid-system" id="derbyGridContainer">
+            </div>
+        <div class="unified-finish-line"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const MAX_TICKS = 9;
+            let lastPhaseKey = null;
+            /* Gallop mark-to-mark — revert: remove horseVisualScores/gallopHorseToMark
+               and restore direct donkey.style.left assignment. */
+            const horseVisualScores = {};
+            const horseGallopTimers = {};
+            const GALLOP_STEP_MS = 190;
+
+            function scoreToLeftPct(score) {
+                // Inset start so horse body/tail clears the avatar column at mark 0
+                const startPct = 5;
+                const t = Math.max(0, Math.min(MAX_TICKS, Number(score) || 0)) / MAX_TICKS;
+                return startPct + t * (100 - startPct);
+            }
+
+            function gallopHorseToMark(donkey, idx, targetScore) {
+                const target = Math.max(0, Math.min(MAX_TICKS, targetScore | 0));
+
+                if (!(idx in horseVisualScores)) {
+                    horseVisualScores[idx] = target;
+                    donkey.style.left = `${scoreToLeftPct(target)}%`;
+                    donkey.classList.remove('is-galloping');
+                    donkey.dataset.gallopTarget = String(target);
+                    return;
+                }
+
+                let current = horseVisualScores[idx];
+                if (current === target) {
+                    donkey.style.left = `${scoreToLeftPct(target)}%`;
+                    donkey.classList.remove('is-galloping');
+                    donkey.dataset.gallopTarget = String(target);
+                    return;
+                }
+
+                // Same destination already in progress — don't restart mid-stride
+                if (horseGallopTimers[idx] && donkey.dataset.gallopTarget === String(target)) {
+                    return;
+                }
+
+                if (horseGallopTimers[idx]) {
+                    clearTimeout(horseGallopTimers[idx]);
+                    horseGallopTimers[idx] = null;
+                }
+                donkey.dataset.gallopTarget = String(target);
+
+                const step = current < target ? 1 : -1;
+
+                function stride() {
+                    current += step;
+                    horseVisualScores[idx] = current;
+                    donkey.classList.remove('is-galloping');
+                    void donkey.offsetWidth;
+                    donkey.classList.add('is-galloping');
+                    donkey.style.left = `${scoreToLeftPct(current)}%`;
+
+                    if (current !== target) {
+                        horseGallopTimers[idx] = setTimeout(stride, GALLOP_STEP_MS);
+                    } else {
+                        horseGallopTimers[idx] = setTimeout(() => {
+                            donkey.classList.remove('is-galloping');
+                            horseGallopTimers[idx] = null;
+                        }, GALLOP_STEP_MS);
+                    }
+                }
+
+                stride();
+            }
+
+            function renderAvatarHtml(avatar, name) {
+                if (avatar) {
+                    return `<img src="${avatar}">`;
+                }
+                const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                return `<div class="initials">${initials}</div>`;
+            }
+
+            function updateRoundUI(gd) {
+                const dots = document.querySelectorAll('.round-dot');
+                dots.forEach((dot, idx) => {
+                    dot.classList.toggle('active', idx < gd.currentRound);
+                });
+            }
+
+            function createChampagneBurst() {
+                const bg = document.getElementById('victoryConfetti');
+                if (!bg) return;
+                bg.querySelectorAll('.champ-spray, .champ-foam').forEach(el => el.remove());
+
+                // Restart cork pop sequence each time winner shows
+                bg.querySelectorAll('.champ-cork').forEach(cork => {
+                    cork.style.animation = 'none';
+                    void cork.offsetWidth;
+                    cork.style.animation = '';
+                });
+
+                const bottles = bg.querySelectorAll('.champ-bottle');
+                bottles.forEach((bottle, bottleIdx) => {
+                    const mouth = bottle.querySelector('.champ-mouth') || bottle;
+                    const side = bottle.classList.contains('left') ? 1 : -1;
+                    // Cork finishes ~1.05s; spray starts after that
+                    const sprayBase = 1.08 + bottleIdx * 0.08;
+                    for (let i = 0; i < 18; i++) {
+                        const drop = document.createElement('div');
+                        const isFoam = i % 5 === 0;
+                        drop.className = isFoam ? 'champ-foam' : 'champ-spray';
+                        const outward = side * (12 + Math.random() * 90);
+                        const upward = -(100 + Math.random() * 200);
+                        const drift = (Math.random() - 0.5) * 40;
+                        drop.style.setProperty('--tx', `${outward + drift}px`);
+                        drop.style.setProperty('--ty', `${upward}px`);
+                        drop.style.setProperty('--delay', `${(sprayBase + Math.random() * 0.55).toFixed(2)}s`);
+                        drop.style.setProperty('--dur', `${(1.15 + Math.random() * 0.85).toFixed(2)}s`);
+                        if (!isFoam) {
+                            const size = 4 + Math.random() * 7;
+                            drop.style.width = `${size}px`;
+                            drop.style.height = `${size}px`;
+                            drop.style.background = Math.random() > 0.45 ? '#fff8d6' : '#ffeb3b';
+                        }
+                        mouth.appendChild(drop);
+                    }
+                });
+            }
+
+            function renderGrid(gd) {
+                const container = document.getElementById('derbyGridContainer');
+
+                // Row height: full 138px (matches --fc-avatar-inplay's badge frame) whenever
+                // it fits; only compressed when the player count genuinely doesn't fit the
+                // container's real available height (only happens at max player count).
+                const availableHeight = container.getBoundingClientRect().height;
+                const playerCount = gd.players.length || 1;
+                const rowHeight = Math.min(138, Math.floor(availableHeight / playerCount));
+                container.style.setProperty('--derby-row-height', `${rowHeight}px`);
+
+                const needsRebuild = container.children.length !== gd.players.length
+                    || !!(gd.isDoublesLineup) !== !!(container.dataset.doubles === '1');
+                if (needsRebuild) {
+                    container.innerHTML = '';
+                    container.dataset.doubles = gd.isDoublesLineup ? '1' : '0';
+                    gd.players.forEach((p, idx) => {
+                        const row = document.createElement('div');
+                        row.className = `derby-row color-${idx % 8}`;
+
+                        // Skip i=0 -- that tick lands exactly at the horse's starting
+                        // position (score 0 == the same left% the horse starts at), so it
+                        // rendered underneath the horse at the gate.
+                        let ticksHtml = '';
+                        for (let i = 1; i <= MAX_TICKS; i++) {
+                            const percentage = scoreToLeftPct(i);
+                            ticksHtml += `<div class="lane-tick" style="left: ${percentage}%"></div>`;
+                        }
+
+                        let dotsInner = '';
+                        for (let d = 0; d < 3; d++) {
+                            dotsInner += '<div class="dot"></div>';
+                        }
+
+                        const positionPct = scoreToLeftPct(p.score || 0);
+                        horseVisualScores[idx] = p.score || 0;
+                        if (horseGallopTimers[idx]) {
+                            clearTimeout(horseGallopTimers[idx]);
+                            horseGallopTimers[idx] = null;
+                        }
+
+                        const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+                        const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                        const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                            ? gd.throwerIndices[idx] : 0;
+                        let sidebarHtml;
+                        if (isDuo && window.FC_renderDoublesDuo) {
+                            const duo = FC_renderDoublesDuo(members, {
+                                isActive: false,
+                                throwerIdx,
+                                colorIndex: idx,
+                                dartsHtml: dotsInner
+                            });
+                            sidebarHtml = `
+                                <div class="sidebar-node is-duo">
+                                    <div class="right-avatar-anchor is-duo-anchor">${duo}</div>
+                                </div>`;
+                        } else {
+                            const badge = FC_renderPlayerBadge(p.avatar, p.name, { colorIndex: idx, orbit: false });
+                            sidebarHtml = `
+                                <div class="sidebar-node">
+                                    <div class="dart-dots">${dotsInner}</div>
+                                    <div class="right-avatar-anchor">${badge}</div>
+                                </div>`;
+                        }
+                        row.innerHTML = `
+                            ${sidebarHtml}
+                            <div class="race-lane">
+                                <div class="lane-track-line"></div>
+                                ${ticksHtml}
+                                <div class="donkey-runner" style="left: ${positionPct}%">
+                                    <div class="horse-bob">
+                                        <img class="horse-sprite" src="../assets/derby/horse-racer.png" alt="">
+                                        <div class="horse-number">${p.targetNumber}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        container.appendChild(row);
+                    });
+                }
+
+                gd.players.forEach((p, idx) => {
+                    const row = container.children[idx];
+                    if (!row) return;
+                    const isActive = idx === gd.activeIdx;
+                    const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+                    const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                    const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null)
+                        ? gd.throwerIndices[idx] : 0;
+
+                    row.className = `derby-row color-${idx % 8} ${isActive ? 'active-turn' : ''}`;
+
+                    row.querySelectorAll('.dot').forEach((dot, d) => {
+                        dot.classList.toggle('thrown', isActive && d < gd.throwsThisTurn);
+                    });
+
+                    // Refresh active orbit + darts without full rebuild
+                    const anchor = row.querySelector('.right-avatar-anchor');
+                    if (anchor) {
+                        let dotsInner = '';
+                        for (let d = 0; d < 3; d++) {
+                            dotsInner += `<div class="dot${isActive && d < gd.throwsThisTurn ? ' thrown' : ''}"></div>`;
+                        }
+                        if (isDuo && window.FC_renderDoublesDuo) {
+                            anchor.innerHTML = FC_renderDoublesDuo(members, {
+                                isActive, throwerIdx, colorIndex: idx, dartsHtml: dotsInner
+                            });
+                        } else {
+                            const hasOrbit = !!anchor.querySelector('.fc-active-orbit');
+                            if (hasOrbit !== !!isActive) {
+                                anchor.innerHTML = FC_renderPlayerBadge(p.avatar, p.name, {
+                                    colorIndex: idx, orbit: isActive
+                                });
+                            }
+                        }
+                    }
+                    // Keep singles dart dots in sync (duo darts live inside the duo row)
+                    if (!isDuo) {
+                        row.querySelectorAll('.sidebar-node > .dart-dots .dot').forEach((dot, d) => {
+                            dot.classList.toggle('thrown', isActive && d < gd.throwsThisTurn);
+                        });
+                    }
+
+                    const donkey = row.querySelector('.donkey-runner');
+                    if (donkey) {
+                        gallopHorseToMark(donkey, idx, p.score || 0);
+                    }
+
+                    const saddle = row.querySelector('.horse-number');
+                    if (saddle) saddle.innerText = p.targetNumber;
+                });
+            }
+
+            function renderPhaseOverlays(gd) {
+                document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+
+                const phase = gd.phase || { type: 'playing' };
+                const phaseKey = `${phase.type}-${phase.startedAt}`;
+                const matchWinnerScreen = document.getElementById('matchWinnerScreen');
+                const multScreen = document.getElementById('derbyMultScreen');
+
+                if (phaseKey === lastPhaseKey) return;
+                lastPhaseKey = phaseKey;
+
+                const pastPostScreen = document.getElementById('pastPostScreen');
+                document.body.classList.remove('derby-animate-next');
+                matchWinnerScreen.classList.remove('active', 'mode-draw');
+                multScreen.classList.remove('active', 'mode-boost', 'mode-knock', 'mode-knock-soft', 'mode-knock-triple', 'mode-boost-triple');
+                if (pastPostScreen) pastPostScreen.classList.remove('active');
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(matchWinnerScreen);
+                const raScreen = document.getElementById('roundAnnounceScreen');
+                if (raScreen) {
+                    raScreen.className = 'round-announce-takeover';
+                    raScreen.setAttribute('aria-hidden', 'true');
+                }
+
+                if (phase.type === 'round_announce') {
+                    const d = phase.data || {};
+                    if (!raScreen) return;
+                    raScreen.className = 'round-announce-takeover active' + (d.isLast ? ' mode-final' : '');
+                    raScreen.setAttribute('aria-hidden', 'false');
+                    const r = d.round || 1;
+                    document.getElementById('raPennant').innerText = d.isLast ? 'FINAL FURLONG' : 'POST TIME';
+                    document.getElementById('raEyebrow').innerText = d.eyebrow || 'POST TIME';
+                    document.getElementById('raTitle').innerText = d.title || ('ROUND ' + r);
+                    document.getElementById('raOf').innerText = d.maxRounds
+                        ? ('FURLONG ' + r + ' OF ' + d.maxRounds)
+                        : ('FURLONG ' + r);
+                    const tags = document.getElementById('raTags');
+                    const tagList = Array.isArray(d.tags) ? d.tags : [];
+                    tags.innerHTML = tagList.map(t => {
+                        const hot = /FINAL/i.test(t) ? ' hot' : '';
+                        return '<span class="ra-tag' + hot + '">' + t + '</span>';
+                    }).join('');
+                    document.getElementById('raSub').innerText = d.subtitle || '';
+                    return;
+                }
+
+                if (phase.type === 'intermission') {
+                    const name = phase.data.nextPlayerName || phase.data.nextTeamName || 'PLAYER';
+                    const number = phase.data.targetNumber != null ? phase.data.targetNumber : '—';
+                    document.getElementById('nextPlayerAvatarSlot').innerHTML = renderAvatarHtml(phase.data.avatar, name);
+                    document.getElementById('nextPlayerNameBanner').innerText = name;
+                    document.getElementById('nextPlayerNumberCloth').innerText = number;
+
+                    const gateHorse = document.querySelector('#nextPlayerStagePage .ctp-gate-horse');
+                    if (gateHorse) {
+                        gateHorse.style.animation = 'none';
+                        void gateHorse.offsetWidth;
+                        gateHorse.style.animation = '';
+                    }
+
+                    document.body.classList.add('derby-animate-next');
+                    return;
+                }
+
+                if (phase.type === 'mult_boost' || phase.type === 'mult_knock') {
+                    const data = phase.data || {};
+                    const isBoost = phase.type === 'mult_boost';
+                    const mult = data.multiplier === 3 ? 3 : (data.multiplier === 1 ? 1 : 2);
+                    const isSoftKnock = !isBoost && mult === 1;
+                    const isTripleKnock = !isBoost && mult === 3;
+                    const isTripleBoost = isBoost && mult === 3;
+                    const steps = data.steps != null ? data.steps : mult;
+                    const name = data.playerName || 'PLAYER';
+
+                    // Restart horse animation on each show (full D/T calls only)
+                    const horse = multScreen.querySelector('.mult-horse-run');
+                    if (horse && !isSoftKnock) {
+                        horse.style.animation = 'none';
+                        void horse.offsetWidth;
+                        horse.style.animation = '';
+                    }
+
+                    multScreen.classList.add('active', isBoost ? 'mode-boost' : 'mode-knock');
+                    if (isSoftKnock) multScreen.classList.add('mode-knock-soft');
+                    if (isTripleKnock) multScreen.classList.add('mode-knock-triple');
+                    if (isTripleBoost) multScreen.classList.add('mode-boost-triple');
+                    document.getElementById('derbyMultPennant').innerText = isBoost ? "Stewards' Call" : 'Inquiry';
+                    document.getElementById('derbyMultEyebrow').innerText = isBoost
+                        ? 'Length Gained'
+                        : (isSoftKnock ? 'Nicked Back' : 'Length Lost');
+                    document.getElementById('derbyMultBadge').innerText =
+                        mult === 3 ? 'TRIPLE!' : (mult === 1 ? 'SINGLE' : 'DOUBLE!');
+                    document.getElementById('derbyMultSteps').innerText = `${isBoost ? '+' : '−'}${steps}`;
+                    document.getElementById('derbyMultName').innerText = name;
+                    document.getElementById('derbyMultNumber').innerText =
+                        data.targetNumber != null ? data.targetNumber : '—';
+                    document.getElementById('derbyMultQuip').innerText = data.quip
+                        || (isBoost ? 'Full Gallop!' : (isSoftKnock ? 'Nicked!' : 'Boxed In!'));
+                    document.getElementById('derbyMultSub').innerText = isBoost
+                        ? 'Surging down the stretch'
+                        : `Checked by ${data.actorName || 'RIVAL'}`;
+                    document.getElementById('derbyMultAvatarSlot').innerHTML = renderAvatarHtml(data.avatar, name);
+                    return;
+                }
+
+                if (phase.type === 'past_post') {
+                    const data = phase.data || {};
+                    const name = data.playerName || 'PLAYER';
+                    document.getElementById('pastPostName').innerText = name;
+                    document.getElementById('pastPostNumber').innerText =
+                        data.targetNumber != null ? data.targetNumber : '—';
+                    document.getElementById('pastPostAvatarSlot').innerHTML = renderAvatarHtml(data.avatar, name);
+
+                    const finishHorse = pastPostScreen.querySelector('.pp-finish-horse');
+                    if (finishHorse) {
+                        finishHorse.style.animation = 'none';
+                        void finishHorse.offsetWidth;
+                        finishHorse.style.animation = '';
+                    }
+
+                    pastPostScreen.classList.add('active');
+                    return;
+                }
+
+                if (phase.type === 'winner' || phase.type === 'draw') {
+                    const isDraw = phase.type === 'draw';
+                    const pennant = matchWinnerScreen.querySelector('.win-pennant-banner');
+                    const callboard = matchWinnerScreen.querySelector('.win-callboard');
+                    const badge = document.getElementById('winnerBadge');
+                    const row = document.getElementById('winnerAvatarRow');
+
+                    matchWinnerScreen.classList.toggle('mode-draw', isDraw);
+                    if (pennant) pennant.innerText = isDraw ? 'Dead Heat' : "Winner's Circle";
+                    if (callboard) callboard.innerText = 'Photo Finish';
+                    if (badge) badge.innerText = isDraw ? 'Dead Heat' : 'First Past The Post';
+
+                    if (isDraw) {
+                        const contenders = Array.isArray(phase.data.contenders) ? phase.data.contenders : [];
+                        const names = contenders.map(c => c.name).filter(Boolean);
+                        document.getElementById('winnerNameText').innerText = names.length
+                            ? names.join(' · ')
+                            : 'DRAW';
+                        row.innerHTML = '';
+                        contenders.forEach(c => {
+                            const wrap = document.createElement('div');
+                            wrap.className = 'win-draw-saddle';
+                            const ring = document.createElement('div');
+                            ring.className = 'win-avatar-ring';
+                            ring.innerHTML = renderAvatarHtml(c.avatar, c.name);
+                            wrap.appendChild(ring);
+                            row.appendChild(wrap);
+                        });
+                    } else {
+                        const members = phase.data.members;
+                        document.getElementById('winnerNameText').innerText = phase.data.winnerName || 'CHAMPION';
+                        if (Array.isArray(members) && members.length > 1) {
+                            const single = document.getElementById('winnerSingleFrame');
+                            if (single) single.style.display = 'none';
+                            if (row) {
+                                row.innerHTML = '';
+                                row.style.display = 'flex';
+                                members.forEach(m => {
+                                    const wrap = document.createElement('div');
+                                    wrap.className = 'win-draw-saddle';
+                                    const ring = document.createElement('div');
+                                    ring.className = 'win-avatar-ring';
+                                    ring.innerHTML = renderAvatarHtml(m.avatar, m.name);
+                                    wrap.appendChild(ring);
+                                    row.appendChild(wrap);
+                                });
+                            }
+                        } else {
+                            const single = document.getElementById('winnerSingleFrame');
+                            if (single) single.style.display = '';
+                            if (row) { row.innerHTML = ''; row.style.display = ''; }
+                            document.getElementById('winnerAvatarSlot').innerHTML = renderAvatarHtml(phase.data.avatar, phase.data.winnerName);
+                        }
+                    }
+
+                    createChampagneBurst();
+                    matchWinnerScreen.classList.add('active');
+                    if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.playIn(matchWinnerScreen);
+                }
+            }
+
+            function applyGameData(gd) {
+                if (!gd || gd.gameType !== 'derby') return;
+                renderGrid(gd);
+                updateRoundUI(gd);
+                renderPhaseOverlays(gd);
+            }
+
+            window.addEventListener('message', (event) => {
+                const messageData = event.data;
+                if (!messageData || messageData.type !== 'SYNC_STATE') return;
+                const state = messageData.state;
+                if (!state || !state.gameData) return;
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.applyFromState(state);
+                    FlightDeckWinnerVideo.applyScreenClass(document.getElementById('matchWinnerScreen'));
+                }
+                applyGameData(state.gameData);
+            });
+        });
+    </script>
+</body>
+</html>
