@@ -155,6 +155,7 @@ const {
 } = require('./cricket');
 const {
     derbyContinueAfterThrow,
+    derbyEndVisitAtFinish,
     derbyDraw,
     derbyLeaders,
     derbyMarkFinishIfNeeded,
@@ -748,8 +749,7 @@ function applyScheduledAction(gameData, action) {
             }
             return derbyContinueAfterThrow(gameData);
         case 'derby_after_past_post':
-            gameData.pendingPastPost = null;
-            return derbyContinueAfterThrow(gameData);
+            return derbyEndVisitAtFinish(gameData);
         case 'killer_resume_playing':
             gameData.phase = makePhase('playing');
             return { gameData, schedule: null };

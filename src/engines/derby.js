@@ -144,6 +144,30 @@ function derbyMultOverlayPhase(selfHit, hitPlayer, actor, multiplier) {
     });
 }
 
+/**
+ * A horse past the post has nothing left to throw for, so its visit ends where
+ * it stands and play moves on. The "Finds the Post / Official Result" screen
+ * reads as the end of that player's game, and until this existed the engine
+ * then sat waiting for darts that could not change anything -- which, if the
+ * finisher was last in the round, looked exactly like a hang. Everyone after
+ * them still gets their visit, so catching up to force a draw is unchanged.
+ *
+ * The finisher is always the active thrower: only your own number moves your
+ * own horse forward. Ending the active visit therefore ends theirs.
+ *
+ * visitEndedEarly tells the server to wait for a takeout it would otherwise
+ * never ask for -- it only waits after a third dart, but the finisher's dart
+ * is still in the board and the board's own visit is still open.
+ */
+function derbyEndVisitAtFinish(gameData) {
+    gameData.pendingPastPost = null;
+    if ((gameData.throwsThisTurn || 0) < 3) {
+        gameData.throwsThisTurn = 3;
+        gameData.visitEndedEarly = true;
+    }
+    return derbyContinueAfterThrow(gameData);
+}
+
 function derbyContinueAfterThrow(gameData) {
     if (gameData.throwsThisTurn === 3) {
         let nextIdx = gameData.activeIdx + 1;
@@ -430,6 +454,7 @@ module.exports = {
     DERBY_MAX_ROUNDS,
     meta,
     derbyContinueAfterThrow,
+    derbyEndVisitAtFinish,
     derbyDraw,
     derbyLeaders,
     derbyMarkFinishIfNeeded,

@@ -58,20 +58,24 @@ fi
 
 PORT="${PORT:-4000}"
 
-# Mock only when nothing is configured. This used to set SCORING_MODE=mock
-# unconditionally, and SCORING_MODE beats data/board.json by design — so any
-# install that boots through run.sh came up on the mock board and silently
-# ignored its own provider. On a rig that means it scores nothing until someone
-# notices. An explicit SCORING_MODE in the environment still wins, both ways.
-if [ -z "${SCORING_MODE:-}" ] && [ ! -f data/board.json ]; then
-    export SCORING_MODE=mock
+# Mock only when nothing is configured; SCORING_MODE beats data/board.json by
+# design, so run.sh must not set it when a board IS configured, or the rig
+# silently scores nothing.
+#
+# The choice is made per LAUNCH, inside the loop below, not once here. It used
+# to be exported once at startup, which made it stick: mini's supervisor
+# started before it had a board.json, and every server restart afterwards
+# inherited mock, so writing board.json and restarting the server changed
+# nothing. Now adding or removing board.json takes effect on the next restart.
+#
+# A SCORING_MODE given by whoever started us is an explicit override and still
+# wins, both ways. It is remembered in FD_SCORING_MODE_EXPLICIT so it survives
+# the self re-exec after a pull, then removed from our own environment so it
+# can only ever reach the server through the launch line.
+if [ -z "${FD_SCORING_MODE_EXPLICIT+set}" ]; then
+    export FD_SCORING_MODE_EXPLICIT="${SCORING_MODE:-}"
 fi
-
-if [ "${SCORING_MODE:-}" = "mock" ]; then
-    board_desc="mock board, no hardware needed"
-else
-    board_desc="board from data/board.json"
-fi
+unset SCORING_MODE
 
 # ------------------------------------------------------------ update policy --
 # THIS LOOP DELIBERATELY DOES NOT PULL ON EVERY RELAUNCH. The relaunch happens
@@ -97,6 +101,26 @@ pull_if_requested() {
         pull*) ;;
         *) return 1 ;;
     esac
+
+    # A reboot runs this before the network is up. On dartsrig the pull fired
+    # 7 s after boot and failed with "Could not resolve host", so auto-update
+    # never happened on a reboot at all. The service's After=network-online
+    # does not cover it: darts-apps is a USER unit, and the user manager's
+    # network-online.target does not track the real network. So wait for the
+    # remote itself, bounded, instead of trusting startup order. No `timeout`
+    # command here -- macOS rigs do not ship one -- so git's own low-speed
+    # limit keeps a half-up network from hanging a probe.
+    local waited=0
+    until git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=8 \
+              ls-remote --exit-code -q origin HEAD >/dev/null 2>&1; do
+        if [ "$waited" -ge 90 ]; then
+            echo "[run.sh] WARNING: $(git remote get-url origin 2>/dev/null) still unreachable after ${waited}s — NOT pulling." >&2
+            echo "[run.sh] Starting the code that is already here. A one-shot update request has been used up; set it again once the network is back." >&2
+            return 1
+        fi
+        [ "$waited" -eq 0 ] && echo "[run.sh] waiting for the network before pulling..."
+        sleep 3; waited=$((waited + 3))
+    done
 
     echo "[run.sh] $(date): pulling latest ($branch) — $decision"
     if ! git pull --ff-only origin "$branch"; then
@@ -135,13 +159,30 @@ while true; do
         fi
     fi
 
+    if [ -n "$FD_SCORING_MODE_EXPLICIT" ]; then
+        board_mode="$FD_SCORING_MODE_EXPLICIT"
+    elif [ ! -f data/board.json ]; then
+        board_mode=mock
+    else
+        board_mode=""
+    fi
+    if [ "$board_mode" = mock ]; then
+        board_desc="mock board, no hardware needed"
+    else
+        board_desc="board from data/board.json"
+    fi
+
     echo ""
     echo "[run.sh] $(date): starting FlightDeck (${board_desc})"
     echo "[run.sh] open https://localhost:${PORT}/control.html"
     echo "[run.sh] (accept the self-signed cert warning the first time)"
     echo ""
 
-    PORT="$PORT" node src/server.js "$@"
+    if [ -n "$board_mode" ]; then
+        SCORING_MODE="$board_mode" PORT="$PORT" node src/server.js "$@"
+    else
+        PORT="$PORT" node src/server.js "$@"
+    fi
 
     echo "[run.sh] $(date): server exited, restarting in 3s..."
     sleep 3

@@ -1248,6 +1248,7 @@ function flushPendingPhaseActions() {
         pendingSchedule = null;
         const result = applyScheduledAction(gameState.gameData, scheduleNow);
         gameState.gameData = result.gameData;
+        awaitTakeoutIfVisitEndedEarly();
         maybePersistQuick10(result);
         logEvent('PHASE_ADVANCE', { next: scheduleNow.next, flushed: true });
         if (result.schedule) {
@@ -1340,6 +1341,30 @@ function enqueueThrow(payload, source) {
     return true;
 }
 
+let lastAppliedDartSource = null;
+
+/**
+ * An engine can end a visit before its third dart -- Derby does once a horse is
+ * past the post. The normal takeout wait only fires after a third dart
+ * (visitEndedAfterThrow), so without this the next player's darts would count
+ * while the finisher's dart is still in the board and the board's own visit is
+ * still open. The board closes that visit when the dart is pulled, whatever the
+ * count, and publishes the same turn-over signal as usual; that is what we wait
+ * for. Any darts queued during the overlay belonged to the finisher and are
+ * dropped rather than applied to whoever throws next.
+ */
+function awaitTakeoutIfVisitEndedEarly() {
+    const gd = gameState.gameData;
+    if (!gd || !gd.visitEndedEarly) return;
+    delete gd.visitEndedEarly;
+    clearThrowQueue('Visit ended early — discarding leftover queue until takeout');
+    if (lastAppliedDartSource === 'bot') return;
+    setAwaitingTakeout(true);
+    logDebugEvent('BOARD_AWAIT_TAKEOUT', 'Visit ended at the finish line — waiting for takeout before next scoring throw.', {
+        source: lastAppliedDartSource
+    });
+}
+
 function schedulePhaseAction(schedule) {
     if (!schedule) return;
     clearPhaseTimer();
@@ -1378,6 +1403,7 @@ function schedulePhaseAction(schedule) {
         const prevPhase = currentPhaseType();
         const result = applyScheduledAction(gameState.gameData, scheduleNow);
         gameState.gameData = result.gameData;
+        awaitTakeoutIfVisitEndedEarly();
         maybePersistQuick10(result);
         maybeTvmRecorderDumpForTvm(prevPhase, result);
         logEvent('PHASE_ADVANCE', { next: scheduleNow.next });
@@ -1827,6 +1853,7 @@ function applyThrowPayload(payload, source, profileOverride = null) {
     const beforeThrows = visitThrowCount(gameState.gameData, gameState.selectedGame);
     const prevPhase = currentPhaseType();
     const dartSource = resolveThrowSource(source);
+    lastAppliedDartSource = dartSource;
     const actionType = throwDebugActionType(dartSource);
 
     const thrower = getActiveThrowerEntity(gameState.gameData, gameState.selectedGame);
