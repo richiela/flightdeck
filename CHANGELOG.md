@@ -49,5 +49,12 @@ Keep **`## Unreleased`** at the **bottom** current between releases — that is 
 - Fix: `run.sh` waits for the network, up to 90 seconds, before an auto-update pull. After a reboot the pull ran before the network was up, failed, and started the existing code, so auto-update never updated anything after a power cycle.
 - Fix: `run.sh` chooses between the mock and the real board every time it starts the server, so adding or changing `data/board.json` takes effect on the next restart. It used to decide once, when `run.sh` itself started.
 
-## Unreleased — since v0.21.2
+## v0.21.3 (Sep 26, 2026)
+
+- **Calls start with the word.** The callout clips were generated with up to 0.4 s of silence before the speech. Both voices are regenerated with that silence trimmed, so every call now starts within a few hundredths of a second, and `scripts/generate-callout-sounds.py` trims it for any voice you add.
+- **Dart calls and cards land sooner.** The server sends a small `DART_ANNOUNCE` message the moment it applies a dart, ahead of the full game state, and the viewer passes it straight to the game, so the call and the card no longer wait for the whole state, roster photos included, to arrive, be parsed and be redrawn. The full state still follows and stays authoritative, including for taking the card down. Cricket's mark card still comes from the state, since it needs the mark animation.
+- **Calls play through Web Audio.** Every callout clip is decoded up front and started from its buffer, so a call has nothing left to prepare when a dart lands; plain HTML audio remains the fallback for a browser that holds audio until someone clicks. A near-silent keep-alive tone stops an HDMI TV or speaker dozing between darts and clipping the first word of the next call.
+- **After updating, reload the viewer page** — restarting the server is not enough. A viewer or kiosk keeps the old call-and-card code in memory until its page reloads.
+
+## Unreleased — since v0.21.3
 

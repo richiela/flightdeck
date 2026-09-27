@@ -56,12 +56,37 @@ def build_phrase_book():
     return phrases
 
 
+# Silence either side of the speech. Kokoro pads generously -- Bella's clips
+# opened with 380-430 ms before the first word, Daniel's with 185-280 ms --
+# and the leading pad is dead time between a dart landing and its call being
+# heard. OpenDarts' generator (tools/voice/generate_kokoro_clips.py) has
+# trimmed its clips from the start; this one never did, which is why FD's
+# calls lagged OD's with the same voices. Same threshold and pad as OD's.
+TRIM_THRESHOLD = 0.02   # of peak amplitude
+KEEP_PAD_S = 0.02
+
+
+def trim_silence(audio, samplerate):
+    """Drop leading/trailing silence, keeping a short pad so the attack is
+    not clipped. A clip that is silent throughout is returned unchanged
+    rather than trimmed to nothing."""
+    import numpy as np
+    peak = float(np.abs(audio).max()) if audio.size else 0.0
+    if peak <= 0.0:
+        return audio
+    loud = np.where(np.abs(audio) > peak * TRIM_THRESHOLD)[0]
+    if loud.size == 0:
+        return audio
+    pad = int(KEEP_PAD_S * samplerate)
+    return audio[max(0, int(loud[0]) - pad):min(len(audio), int(loud[-1]) + pad)]
+
+
 def synth(pipeline, text, voice, speed):
     import numpy as np
     chunks = [audio for _, _, audio in pipeline(text, voice=voice, speed=speed) if audio is not None]
     if not chunks:
         raise RuntimeError(f"Kokoro produced no audio for {text!r}")
-    return np.concatenate(chunks)
+    return np.concatenate([np.asarray(c, dtype="float32") for c in chunks])
 
 
 def write_mp3(audio, samplerate, dest_path):
@@ -115,7 +140,7 @@ def main():
             continue
         text = phrases[key]
         audio = synth(pipeline, text, args.voice, args.speed)
-        write_mp3(audio, 24000, dest)
+        write_mp3(trim_silence(audio, 24000), 24000, dest)
         made += 1
         print(f"  {key:<6} <- {text!r:<16} -> {dest}")
 

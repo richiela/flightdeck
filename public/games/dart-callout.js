@@ -32,16 +32,70 @@
 
     let lastCricketKey = '';
 
+    // The plain card can be raised early, from DART_ANNOUNCE -- a few hundred
+    // bytes the server sends the moment it applies a dart, ahead of the ~180 KB
+    // full state. The state that raised the card follows milliseconds behind,
+    // so for a short window a state still showing the previous phase must not
+    // take the card down. If the confirming state never comes, the safety
+    // timer does. Cricket's mark card is never raised early: it needs the mark
+    // animation data that only the state carries.
+    let earlyUntil = 0;
+    let earlyConfirmed = true;
+    let earlyTimer = null;
+
+    function hideCard(el) {
+        el.classList.remove('is-visible', 'is-miss', 'is-hit', 'is-cricket-marks');
+        el.setAttribute('aria-hidden', 'true');
+        lastCricketKey = '';
+    }
+
+    function showEarlyCard(card) {
+        if (!card) return;
+        const el = ensureEl();
+        const nameEl = document.getElementById('fcDartCalloutName');
+        const labelEl = document.getElementById('fcDartCalloutLabel');
+        const avatarEl = document.getElementById('fcDartCalloutAvatar');
+        const markEl = document.getElementById('fcDartCalloutMark');
+        lastCricketKey = '';
+        if (nameEl) nameEl.textContent = card.playerName || 'PLAYER';
+        if (labelEl) {
+            labelEl.hidden = false;
+            labelEl.textContent = card.label || '—';
+        }
+        if (avatarEl) {
+            avatarEl.innerHTML = '';
+            avatarEl.hidden = true;
+        }
+        if (markEl) {
+            markEl.innerHTML = '';
+            markEl.hidden = true;
+            markEl.setAttribute('aria-hidden', 'true');
+        }
+        el.classList.toggle('is-miss', !!card.miss);
+        el.classList.toggle('is-hit', !card.miss);
+        el.classList.remove('is-cricket-marks');
+        el.classList.add('is-visible');
+        el.setAttribute('aria-hidden', 'false');
+
+        earlyConfirmed = false;
+        earlyUntil = Date.now() + 500;
+        clearTimeout(earlyTimer);
+        earlyTimer = setTimeout(() => {
+            if (!earlyConfirmed) hideCard(el);
+        }, (Number(card.holdMs) || 1200) + 1500);
+    }
+
     function syncDartCallout(gameData) {
         const el = ensureEl();
         const phase = gameData && gameData.phase;
         const show = !!(phase && phase.type === 'dart_callout');
         if (!show) {
-            el.classList.remove('is-visible', 'is-miss', 'is-hit', 'is-cricket-marks');
-            el.setAttribute('aria-hidden', 'true');
-            lastCricketKey = '';
+            if (Date.now() < earlyUntil) return;
+            hideCard(el);
             return;
         }
+        earlyConfirmed = true;
+        earlyUntil = 0;
         const data = phase.data || {};
         const cricketMarks = !!data.cricketMarks;
         const name = data.playerName || 'PLAYER';
@@ -109,6 +163,10 @@
 
     window.addEventListener('message', function (event) {
         const data = event.data;
+        if (data && data.type === 'DART_ANNOUNCE') {
+            showEarlyCard(data.data && data.data.card);
+            return;
+        }
         if (!data || data.type !== 'SYNC_STATE' || !data.state) return;
         syncDartCallout(data.state.gameData);
     });

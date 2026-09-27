@@ -1801,10 +1801,14 @@ function wrapDartCallout(gameData, result, thrower, payload) {
     }
 
     const mode = gameState.dartCalloutMode || 'card';
-    if (mode === 'off') return;
+    if (mode === 'off') return null;
 
     const wantsSound = mode === 'sound' || mode === 'both';
     const wantsCard = mode === 'card' || mode === 'both';
+    // What the viewer needs to call and show this dart, sent on its own ahead
+    // of the full state (see broadcastDartSignal). Sound and card are each
+    // null when this mode does not want them.
+    const signal = { seq: ++dartSignalSeq, voice: gameState.dartCalloutVoice || null, sound: null, card: null };
 
     if (wantsSound) {
         // Non-blocking: publish what was thrown for the viewer to announce,
@@ -1818,14 +1822,15 @@ function wrapDartCallout(gameData, result, thrower, payload) {
             miss: !!(parts && parts.miss),
             playerName: (thrower && thrower.name) || 'PLAYER'
         };
+        signal.sound = { ...gameData.dartAnnounce };
     }
 
-    if (!wantsCard) return;
+    if (!wantsCard) return signal.sound ? signal : null;
 
     // Card — the original blocking interstitial, held for dartCalloutMs.
     // Runs independently of the sound branch above (mode 'both' does both).
     const rawMs = Number(gameState.dartCalloutMs);
-    if (!Number.isFinite(rawMs) || rawMs <= 0) return;
+    if (!Number.isFinite(rawMs) || rawMs <= 0) return signal.sound ? signal : null;
     gameData.dartCalloutResume = {
         phase: clonePhaseSnapshot(gameData.phase),
         schedule: result.schedule || null
@@ -1844,6 +1849,37 @@ function wrapDartCallout(gameData, result, thrower, payload) {
         delayMs: Math.max(100, Math.min(8000, Math.round(rawMs))),
         next: 'end_dart_callout'
     };
+    signal.card = {
+        label: gameData.phase.data.label,
+        miss: gameData.phase.data.miss,
+        playerName: gameData.phase.data.playerName,
+        holdMs: result.schedule.delayMs
+    };
+    return signal;
+}
+
+let dartSignalSeq = 0;
+
+/**
+ * A dart's call and card, sent on their own, BEFORE the full state.
+ *
+ * The full state is ~180 KB -- roster photos included -- and on its way to the
+ * card it is parsed by the viewer, drives a roster redraw there, is copied into
+ * the game's iframe by postMessage and then re-renders the game. The call and
+ * card waited behind all of that. OpenDarts' own dashboard, which lands with
+ * the call, does the opposite: a ~100-byte DART_CALL leaves just before the
+ * dart itself, and the page acts on it at once. This is that, for FlightDeck.
+ *
+ * It carries nothing the game depends on. The engine has already applied the
+ * dart; the full state follows immediately and stays authoritative for
+ * everything else, including when the card goes away.
+ */
+function broadcastDartSignal(signal) {
+    if (!signal) return;
+    const payload = JSON.stringify({ type: 'DART_ANNOUNCE', data: signal });
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(payload);
+    });
 }
 
 /** Apply a throw and update takeout sync. Returns whether an overlay was scheduled. */
@@ -1881,7 +1917,7 @@ function applyThrowPayload(payload, source, profileOverride = null) {
 
     const afterThrows = visitThrowCount(gameState.gameData, gameState.selectedGame);
     if (afterThrows > beforeThrows) {
-        wrapDartCallout(gameState.gameData, result, thrower, payload);
+        broadcastDartSignal(wrapDartCallout(gameState.gameData, result, thrower, payload));
     }
 
     const parts = describeThrowParts(gameState.gameData, payload);

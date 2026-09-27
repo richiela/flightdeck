@@ -726,6 +726,16 @@
         function handleSocketMessage(event) {
             const msg = JSON.parse(event.data);
 
+            // A dart's call and card, ahead of the full state: straight into the
+            // game frame, before the roster redraw and everything else below.
+            if (msg.type === 'DART_ANNOUNCE') {
+                const frame = document.getElementById('gameFrame');
+                if (frame && frame.contentWindow) {
+                    frame.contentWindow.postMessage({ type: 'DART_ANNOUNCE', data: msg.data }, '*');
+                }
+                return;
+            }
+
             if (msg.type === 'BOARD_UPDATE' || msg.type === 'SCOLIA_UPDATE') {
                 renderHeaderScolia(msg.data || {});
                 return;

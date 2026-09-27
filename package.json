@@ -1,6 +1,6 @@
 {
   "name": "flightdeck",
-  "version": "0.21.2",
+  "version": "0.21.3",
   "description": "A control panel + kiosk display for running a real dartboard as a party/venue game system.",
   "main": "src/server.js",
   "scripts": {
