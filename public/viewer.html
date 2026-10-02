@@ -676,6 +676,7 @@
             shanghai: "url('/assets/shanghai/bg.jpg')",
             warmup: "url('/assets/warmup/bg.jpg')",
             quick10: "url('/assets/quick10/bg.jpg')",
+            aroundtheworld: "url('/assets/aroundtheworld/bg.jpg')"
         };
 
         /* Portrait shanghai art — fill screen width; height crops top/bottom as needed. */
@@ -719,7 +720,7 @@
             const titleDisplay = document.getElementById('mirrorGameTitleDisplay');
             if (titleDisplay) {
                 titleDisplay.classList.remove('is-awaiting');
-                titleDisplay.innerText = gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : gameKey.toUpperCase());
+                titleDisplay.innerText = gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : (gameKey === 'aroundtheworld' ? 'AROUND THE WORLD' : gameKey.toUpperCase()));
             }
         }
 

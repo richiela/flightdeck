@@ -213,9 +213,9 @@ function createAutodartsDriver({ host, port, onUpdate, onEvent }) {
             });
         }
 
-        // Camera standby / Stop ↔ active (Start, wake, etc.) — once on edge (lights automation).
-        // Fire STARTED as soon as we leave Stopped (incl. Initializing), not only when running=true,
-        // so Ready never shows while lights stay off. Also fire on first observation if already active.
+        // Camera standby / Stop ↔ active (Start, wake, etc.) — once on each edge; server.js logs
+        // them. Fire STARTED as soon as we leave Stopped (incl. Initializing), not only when
+        // running=true. Also fire on first observation if already active.
         if (prevBoardStatus !== 'Stopped' && norm.boardStatus === 'Stopped') {
             pushEvent('BOARD_DETECTION_STOPPED', {
                 status: norm.status,

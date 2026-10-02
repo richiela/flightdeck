@@ -318,14 +318,118 @@
             --guide-d: 180px;
             --guide-r: 90px;
             --guide-cy: 130px;
-            --cam-view-scale: 0.77;
         }
         #webcamStream {
             width: 100%; height: 100%; object-fit: cover;
-            /* digital zoom-out only (matches AVATAR_GUIDE.zoomOut); no selfie mirror */
-            transform: scale(var(--cam-view-scale, 1));
-            transform-origin: center center;
+            /* Selfie mirror, so people move the way they expect (left is
+               left). The saved photo is mirrored the same way (see
+               captureCroppedAvatar) -- keeping it un-mirrored made it flip the
+               moment it was taken, which was jarring. The crop square is
+               centred in the video, so mirroring about the element's centre
+               leaves it inside the ring. */
+            transform: scaleX(-1);
         }
+        /* Once the stream's size is known, the video is laid out so the square
+           the photo will be cut from sits exactly inside the ring (see
+           layoutCameraPreview). The camera zoom sets that square's size. */
+        #webcamStream.is-framed {
+            position: absolute;
+            object-fit: fill;
+            max-width: none;
+            max-height: none;
+        }
+        .cam-zoom {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 6;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: rgba(0,0,0,0.75);
+            border: 1px solid var(--gold);
+            border-radius: 18px;
+            padding: 2px;
+        }
+        .cam-zoom button {
+            width: 34px;
+            height: 30px;
+            border: none;
+            border-radius: 15px;
+            background: transparent;
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: bold;
+            line-height: 1;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .cam-zoom button:active { background: rgba(197, 160, 89, 0.3); }
+        .cam-zoom button:disabled { opacity: 0.35; cursor: default; }
+        .cam-zoom-level {
+            min-width: 3.2em;
+            text-align: center;
+            color: var(--gold-glow);
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+        /* Take Photo counts down 3-2-1 over the ring, then flashes as it snaps. */
+        .cam-countdown {
+            position: absolute;
+            left: 50%;
+            top: var(--guide-cy);
+            transform: translate(-50%, -50%);
+            z-index: 7;
+            font-family: 'Georgia', serif;
+            font-size: calc(var(--guide-d) * 0.55);
+            font-weight: bold;
+            line-height: 1;
+            color: var(--gold-glow);
+            text-shadow: 0 0 18px rgba(0,0,0,0.85), 0 4px 10px rgba(0,0,0,0.7);
+            pointer-events: none;
+        }
+        .cam-countdown.tick { animation: camCountdownTick 0.9s ease-out forwards; }
+        @keyframes camCountdownTick {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; }
+            100% { opacity: 0.15; transform: translate(-50%, -50%) scale(0.85); }
+        }
+        /* Whole-screen flash: lights the face (the screen is the only light
+           facing the player) and says "that was it". On while the photo is
+           taken, then fades. */
+        .screen-flash {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease-out;
+        }
+        .screen-flash.on { opacity: 1; transition: none; }
+        .camera-box.is-counting .cam-zoom,
+        .camera-box.is-counting .cam-zoom-info { display: none; }
+        .cam-zoom-level { cursor: pointer; }
+        .cam-zoom-info {
+            position: absolute;
+            top: 46px;
+            right: 8px;
+            z-index: 6;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(0,0,0,0.8);
+            color: var(--gold-glow);
+            font-size: 0.7rem;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .camera-box.is-previewing .cam-zoom,
+        .camera-box.is-previewing .cam-zoom-info { display: none; }
         #snapshotPreview {
             position: absolute;
             left: 50%;
@@ -1748,54 +1852,6 @@
             gap: 8px;
         }
 
-        /* Compact dart lights inside Board Debug */
-        .board-lights-strip {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            padding: 4px 6px;
-            border: 1px solid #5a4a3d;
-            border-radius: 4px;
-            background: rgba(90, 74, 61, 0.18);
-            flex: 0 0 auto;
-        }
-        /* Needed for the hidden attribute to bite — the display above would
-           otherwise win. Hidden when Tapo has no credentials. */
-        .board-lights-strip[hidden] { display: none; }
-        .board-lights-main {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px 8px;
-        }
-        .board-lights-label {
-            font-family: sans-serif;
-            font-size: 0.68rem;
-            font-weight: 700;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-            color: #e8d4b8;
-        }
-        .board-lights-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2px 12px;
-            font-family: sans-serif;
-            font-size: 0.68rem;
-            color: #bbb;
-        }
-        .board-lights-meta strong {
-            color: #eee;
-            font-weight: 700;
-        }
-        .board-lights-strip .scolia-cmd-row {
-            margin-left: auto;
-        }
-        .board-lights-strip .scolia-cmd-row button {
-            padding: 3px 7px;
-            font-size: 0.64rem;
-        }
-
         .scolia-status-pill {
             font-size: 0.68rem;
             letter-spacing: 1px;
@@ -2381,6 +2437,13 @@
                             <img id="snapshotPreview" alt="Snapshot">
                             <div class="avatar-guide-shade" aria-hidden="true"></div>
                             <div class="avatar-guide-ring" aria-hidden="true"></div>
+                            <div class="cam-zoom" id="camZoom" aria-label="Camera zoom">
+                                <button type="button" id="camZoomOut" aria-label="Zoom out">−</button>
+                                <span class="cam-zoom-level" id="camZoomLevel">1.0×</span>
+                                <button type="button" id="camZoomIn" aria-label="Zoom in">+</button>
+                            </div>
+                            <div class="cam-zoom-info" id="camZoomInfo" hidden></div>
+                            <div class="cam-countdown" id="camCountdown" hidden></div>
                         </div>
                         <button class="snap-overlay-btn" id="snapBtn">Take Photo!</button>
                     </div>
@@ -2469,6 +2532,10 @@
                 <div class="game-card" data-game="cricket" data-category="classic" hidden>
                     <h3>Cricket</h3>
                     <p>Close 20–15 and bull. Score while opponents still have them open. Max 4 players or teams.</p>
+                </div>
+                <div class="game-card" data-game="aroundtheworld" data-category="classic" hidden>
+                    <h3>Around the World</h3>
+                    <p>Hit 1 through 20, then the bull. Any bed counts — your score is the darts it takes. Fewest wins.</p>
                 </div>
             </div>
         </div>
@@ -2584,24 +2651,6 @@
                     <h3>
                         Board Debug
                     </h3>
-                    <div class="board-lights-strip" id="hubLightsPanel" hidden>
-                        <div class="board-lights-main">
-                            <span class="board-lights-label">Lights</span>
-                            <span class="scolia-status-pill muted" id="lightsStatusPill">—</span>
-                            <div class="scolia-cmd-row" id="lightsCmdRow">
-                                <button type="button" id="lightsOnBtn">On</button>
-                                <button type="button" id="lightsOffBtn">Off</button>
-                                <button type="button" id="lightsToggleBtn">Toggle</button>
-                                <button type="button" id="lightsRefreshBtn">Refresh</button>
-                            </div>
-                        </div>
-                        <div class="board-lights-meta" id="lightsMetaGrid">
-                            <span>Power: <strong id="lightsPower">—</strong></span>
-                            <span>Host: <strong id="lightsHost">—</strong></span>
-                            <span>Conn: <strong id="lightsConn">—</strong></span>
-                        </div>
-                        <div class="scolia-error-line" id="lightsErrorLine" hidden></div>
-                    </div>
                     <div class="scolia-meta-grid" id="scoliaMetaGrid">
                         <div>Conn: <strong id="scoliaConn">—</strong></div>
                         <div>ID: <strong id="scoliaSerial">—</strong></div>
@@ -2777,6 +2826,17 @@
                             </div>
                         </div>
 
+                        <div class="debug-game-group" data-game="aroundtheworld">
+                            <p class="debug-game-label">Around the World</p>
+                            <div class="debug-preview-grid">
+                                <button type="button" class="debug-btn-preview" data-screen="next">Next</button>
+                                <button type="button" class="debug-btn-preview" data-screen="last_call">Last Call</button>
+                                <button type="button" class="debug-btn-preview" data-screen="landed">Landed</button>
+                                <button type="button" class="debug-btn-preview" data-screen="winner">Winner</button>
+                                <button type="button" class="debug-btn-preview" data-screen="draw">Draw</button>
+                            </div>
+                        </div>
+
                         <div class="debug-game-group" data-game="quick10">
                             <p class="debug-game-label">Quick 10</p>
                             <div class="debug-preview-grid">
@@ -2935,7 +2995,7 @@
         let activeGameCategory = 'social';
         let activeLayerId = 1;
         let activeBgGameKey = null;
-        const CLASSIC_GAMES = new Set(['warmup', 'quick10', 'x01', 'cricket']);
+        const CLASSIC_GAMES = new Set(['warmup', 'quick10', 'x01', 'cricket', 'aroundtheworld']);
 
         function categoryForGame(gameKey) {
             return CLASSIC_GAMES.has(gameKey) ? 'classic' : 'social';
@@ -2955,57 +3015,6 @@
             const stillVisible = visible.some((c) => c.dataset.game === locallySelectedGame);
             if (!stillVisible && visible[0]) {
                 updateSelectedGameVisuals(visible[0].dataset.game, userTriggered);
-            }
-        }
-
-        function renderLightsPanel(state) {
-            const pill = document.getElementById('lightsStatusPill');
-            const power = document.getElementById('lightsPower');
-            const host = document.getElementById('lightsHost');
-            const conn = document.getElementById('lightsConn');
-            const err = document.getElementById('lightsErrorLine');
-            if (!pill) return;
-
-            // With no Tapo credentials every field below reads "—" and the
-            // buttons do nothing, so hide the strip rather than show a dead
-            // panel. The server sends a LIGHTS_UPDATE on connect, so this
-            // resolves once per client without waiting for a state change.
-            const panel = document.getElementById('hubLightsPanel');
-            const configured = !!(state && state.configured);
-            if (panel) panel.hidden = !configured;
-            if (!configured) return;
-
-            const on = state && state.on;
-            const tone = !state || !state.configured || state.connection === 'error' || state.connection === 'unconfigured'
-                ? 'bad'
-                : state.connection === 'open'
-                    ? (on === true ? 'ok' : (on === false ? 'warn' : 'muted'))
-                    : 'muted';
-            pill.className = `scolia-status-pill ${tone}`;
-            pill.textContent = !state || !state.configured
-                ? 'Setup'
-                : state.connection === 'error'
-                    ? 'Error'
-                    : on === true ? 'On' : on === false ? 'Off' : (state.connection || '—');
-
-            if (power) {
-                power.textContent = on === true ? 'ON' : on === false ? 'OFF' : '—';
-            }
-            if (host) host.textContent = (state && state.host) || '—';
-            if (conn) {
-                const bits = [(state && state.connection) || '—'];
-                if (state && state.nickname) bits.push(state.nickname);
-                if (state && state.model) bits.push(state.model);
-                conn.textContent = bits.join(' · ');
-            }
-            if (err) {
-                if (state && state.lastError) {
-                    err.hidden = false;
-                    err.textContent = state.lastError;
-                } else {
-                    err.hidden = true;
-                    err.textContent = '';
-                }
             }
         }
 
@@ -3092,6 +3101,7 @@
             shanghai: "url('/assets/shanghai/bg.jpg')",
             warmup: "url('/assets/warmup/bg.jpg')",
             quick10: "url('/assets/quick10/bg.jpg')",
+            aroundtheworld: "url('/assets/aroundtheworld/bg.jpg')"
         };
         /* Portrait shanghai art — fill screen width; height crops top/bottom as needed. */
         const gameBackgroundSizes = {
@@ -3116,6 +3126,7 @@
             shanghai: 'radial-gradient(circle at 50% 28%, #c45a28 0%, #8a3a18 40%, #4a2010 100%)',
             warmup: 'radial-gradient(circle at 50% 28%, #f0b35a 0%, #d4893a 35%, #8a4a18 70%, #2a1810 100%)',
             quick10: 'radial-gradient(circle at 50% 28%, #3d8ec8 0%, #1a5080 40%, #0a2038 78%, #061018 100%)',
+            aroundtheworld: 'radial-gradient(circle at 50% 28%, #1d7486 0%, #0f4a5a 42%, #07222c 100%)'
         };
         const REGISTRATION_BG = "url('/assets/app/viewer_registration.png')";
 
@@ -3141,7 +3152,7 @@
             return gameKey === 'x01' ? 'X01' : 'Cricket';
         }
 
-        const SOLO_START_GAMES = new Set(['warmup', 'quick10', 'x01']);
+        const SOLO_START_GAMES = new Set(['warmup', 'quick10', 'x01', 'aroundtheworld']);
 
         function gameAllowsSoloStart(gameKey) {
             return SOLO_START_GAMES.has(gameKey);
@@ -3453,6 +3464,7 @@
         }
 
         function releaseCamera() {
+            if (typeof cancelSnapCountdown === 'function') cancelSnapCountdown();
             cameraSessionId += 1;
             cameraInitPromise = null;
             const video = document.getElementById('webcamStream');
@@ -3472,7 +3484,13 @@
             cameraInitPromise = (async () => {
                 try {
                     const video = document.getElementById('webcamStream');
-                    const constraints = { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false };
+                    // Ask for the camera's widest view. A small request (it was
+                    // 640x480) lets some phones answer with a crop from the middle
+                    // of the sensor, so people looked too close before any zoom was
+                    // applied. 4:3 is the shape of most front-camera sensors; a 16:9
+                    // webcam just answers with its nearest mode. Framing is then
+                    // done here, per device (see CAMERA_ZOOM).
+                    const constraints = { video: { width: { ideal: 1920 }, height: { ideal: 1440 }, facingMode: "user" }, audio: false };
                     let stream;
                     try {
                         stream = await requestCameraStream(constraints);
@@ -3485,6 +3503,7 @@
                     }
                     videoStreamTrack = stream;
                     video.srcObject = stream;
+                    readHardwareZoom();
                     video.addEventListener('loadedmetadata', syncAvatarGuideMetrics, { once: true });
                     syncAvatarGuideMetrics();
                 } catch (err) {
@@ -3500,77 +3519,323 @@
         document.addEventListener('keydown', noteControlLocalActivity);
 
         /* Circular guide geometry — must match CSS crop overlay */
-        /* zoomOut > 1: sample a wider FOV into the circle (person appears smaller). Preview uses 1/zoomOut.
-           Keep sizeRatio ≲ 1/zoomOut so the ring stays on live video, not letterbox. */
-        const AVATAR_GUIDE = { sizeRatio: 0.75, centerYRatio: 0.5, outputSize: 320, zoomOut: 1.2 };
+        const AVATAR_GUIDE = { sizeRatio: 0.75, centerYRatio: 0.5, outputSize: 320 };
+
+        /*
+         * Camera zoom, per device. Front cameras differ wildly in field of view:
+         * an iPad's is ultra-wide (built for Center Stage), so people looked far
+         * away; phones' are narrow, so they looked too close; a laptop webcam sat
+         * in between. One fixed framing cannot suit all three.
+         *
+         * Zoom 1.0 puts the camera's whole height in the ring -- the widest a
+         * square photo can be. Higher zooms cut a smaller square from the middle.
+         * Each device starts from a guess for its kind and remembers whatever the
+         * operator sets with the − / + buttons (localStorage, so per device and
+         * per browser). 1.3 is about what every device got before.
+         */
+        const CAMERA_ZOOM = { min: 1, max: 3, step: 1.1, storageKey: 'fd.cameraZoom' };  // min: widest DIGITAL zoom
+
+        function defaultCameraZoom() {
+            const ua = navigator.userAgent || '';
+            const isIPad = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+            if (isIPad) return 1.7;
+            if (/Android|iPhone|iPod/.test(ua)) return 1.0;
+            return 1.3;
+        }
+
+        function clampCameraZoom(z) {
+            const n = Number(z);
+            if (!Number.isFinite(n) || n <= 0) return defaultCameraZoom();
+            // The low end is checked against the camera when framing (a
+            // camera with hardware zoom can go below 1x).
+            return Math.min(CAMERA_ZOOM.max, n);
+        }
+
+        let cameraZoom = (() => {
+            try {
+                const saved = localStorage.getItem(CAMERA_ZOOM.storageKey);
+                if (saved != null) return clampCameraZoom(saved);
+            } catch (_) { /* storage blocked: use the default */ }
+            return defaultCameraZoom();
+        })();
+
+        /** Shows the zoom in effect; the lowest reachable depends on this camera and box. */
+        function renderCameraZoom(f) {
+            const zoom = f && f.zoom != null ? f.zoom : cameraZoom;
+            const floor = f && f.floor != null ? f.floor : CAMERA_ZOOM.min;
+            const level = document.getElementById('camZoomLevel');
+            if (level) level.textContent = `${zoom.toFixed(1)}×`;
+            const out = document.getElementById('camZoomOut');
+            const inn = document.getElementById('camZoomIn');
+            if (out) out.disabled = zoom <= floor + 1e-6;
+            if (inn) inn.disabled = zoom >= CAMERA_ZOOM.max - 1e-6;
+            const info = document.getElementById('camZoomInfo');
+            if (info && !info.hidden) {
+                const video = document.getElementById('webcamStream');
+                const hw = hwZoom
+                    ? `camera zoom ${hwZoom.min}–${hwZoom.max}${f && f.hardware < 1 ? ` (using ${f.hardware.toFixed(2)})` : ''}`
+                    : 'no camera zoom';
+                info.textContent = `${video.videoWidth || '?'}×${video.videoHeight || '?'} · ${hw} · widest ${floor.toFixed(2)}×`;
+            }
+        }
+
+        function setCameraZoom(z) {
+            // Snap to what this camera can reach, so − right after the widest
+            // setting does not have to climb back out of an unreachable value.
+            const box = document.getElementById('cameraBox');
+            const f = box ? avatarFraming(document.getElementById('webcamStream'), box) : null;
+            const floor = f && f.floor != null ? f.floor : CAMERA_ZOOM.min;
+            cameraZoom = Math.max(floor, Math.min(CAMERA_ZOOM.max, Number(z) || defaultCameraZoom()));
+            try { localStorage.setItem(CAMERA_ZOOM.storageKey, String(cameraZoom)); } catch (_) {}
+            layoutCameraPreview();
+        }
+
+        /* Widest the ring may grow to, as a share of the box's short side. */
+        const RING_MAX_RATIO = 0.96;
+        /* Least share of the box's width the video must span (see avatarFraming). */
+        const VIDEO_MIN_WIDTH = 0.88;
+
+        /*
+         * Hardware zoom, when the camera offers zoom below 1x (some Android
+         * front cameras have a wider mode). null when it does not -- iPads and
+         * laptop webcams, and many phones.
+         */
+        let hwZoom = null;
+        let hwZoomApplied = 1;
+
+        function cameraTrack() {
+            return videoStreamTrack && videoStreamTrack.getVideoTracks
+                ? videoStreamTrack.getVideoTracks()[0] || null
+                : null;
+        }
+
+        function readHardwareZoom() {
+            hwZoom = null;
+            hwZoomApplied = 1;
+            const track = cameraTrack();
+            const caps = track && typeof track.getCapabilities === 'function' ? track.getCapabilities() : null;
+            const z = caps && caps.zoom;
+            if (z && Number.isFinite(z.min) && Number.isFinite(z.max)) {
+                hwZoom = { min: z.min, max: z.max, step: z.step || 0.1 };
+                const settings = track.getSettings ? track.getSettings() : {};
+                if (Number.isFinite(settings.zoom)) hwZoomApplied = settings.zoom;
+            }
+        }
+
+        function applyHardwareZoom(level) {
+            const track = cameraTrack();
+            if (!track || !hwZoom) return;
+            const want = Math.max(hwZoom.min, Math.min(1, level));
+            if (Math.abs(want - hwZoomApplied) < 0.01) return;
+            hwZoomApplied = want;
+            track.applyConstraints({ advanced: [{ zoom: want }] }).catch(() => {});
+        }
+
+        /**
+         * The framing for the current zoom: where the ring sits, how big it is,
+         * and the square of video (in video pixels) the photo is cut from.
+         *
+         * The video always fills the box's height and nearly all its width --
+         * no black frame round a small picture. Zooming in shrinks the square inside a fixed ring. Zooming
+         * out grows the square until the video would stop covering the box;
+         * past that the RING grows instead, up to nearly the box's height, and
+         * then the digital zoom has reached its widest. Below that, a camera
+         * with hardware zoom under 1x carries on (see hwZoom).
+         */
+        function avatarFraming(video, box) {
+            const boxW = box.clientWidth;
+            const boxH = box.clientHeight;
+            const baseD = Math.min(boxW, boxH) * AVATAR_GUIDE.sizeRatio;
+            const maxD = Math.min(boxW, boxH) * RING_MAX_RATIO;
+            const frame = { guideD: baseD, cx: boxW / 2, cy: boxH * AVATAR_GUIDE.centerYRatio };
+            const vw = video && video.videoWidth;
+            const vh = video && video.videoHeight;
+            if (!vw || !vh || !boxW || !boxH) return frame;
+
+            const short = Math.min(vw, vh);
+            // "Covers" = the video fills the box's height and at least
+            // VIDEO_MIN_WIDTH of its width. Demanding the full width too would
+            // crop a 4:3 camera's top and bottom in this wide box, costing the
+            // widest view exactly the height a too-close camera needs.
+            const kCover = Math.max(boxH / vh, VIDEO_MIN_WIDTH * boxW / vw);
+            // Widest digital zoom is always 1.0: the camera's full height in the
+            // ring. Below the zoom where the video can still cover the box, the
+            // picture shrinks inside it and bars show round it -- not pretty,
+            // but on a narrow camera in a wide box it is the only way a face
+            // fits (asked for, 2026-09-30).
+            const digitalFloor = CAMERA_ZOOM.min;
+            const floor = hwZoom && hwZoom.min < 1 ? digitalFloor * hwZoom.min : digitalFloor;
+            const zoom = Math.max(floor, Math.min(CAMERA_ZOOM.max, cameraZoom));
+            const digital = Math.max(zoom, digitalFloor);
+            const hardware = zoom < digitalFloor ? zoom / digitalFloor : 1;
+
+            const sSize = short / digital;
+            let k = baseD / sSize;
+            let guideD = baseD;
+            if (k < kCover) {
+                // Zoomed out past the fixed ring: grow the ring on a covering
+                // video, and once the ring is as big as it gets, let the video
+                // shrink under it.
+                guideD = Math.min(maxD, sSize * kCover);
+                k = guideD / sSize;
+            }
+            return {
+                ...frame, guideD, vw, vh, k, sSize,
+                sx: (vw - sSize) / 2, sy: (vh - sSize) / 2,
+                zoom, floor, hardware
+            };
+        }
+
+        /**
+         * Lays the video out so the photo's square fills the ring exactly: what
+         * is inside the ring is what gets saved, on every device and at every
+         * zoom. The rest of the frame shows around it under the shade.
+         */
+        function layoutCameraPreview() {
+            const box = document.getElementById('cameraBox');
+            const video = document.getElementById('webcamStream');
+            if (!box || !video) return;
+            const f = avatarFraming(video, box);
+            if (!f.sSize) {
+                video.classList.remove('is-framed');
+                renderCameraZoom();
+                return;
+            }
+            const k = f.k;
+            box.style.setProperty('--guide-d', `${f.guideD}px`);
+            box.style.setProperty('--guide-r', `${f.guideD / 2}px`);
+            applyHardwareZoom(f.hardware);
+            renderCameraZoom(f);
+            video.classList.add('is-framed');
+            video.style.width = `${f.vw * k}px`;
+            video.style.height = `${f.vh * k}px`;
+            video.style.left = `${f.cx - (f.vw / 2) * k}px`;
+            video.style.top = `${f.cy - (f.vh / 2) * k}px`;
+        }
 
         function syncAvatarGuideMetrics() {
             const box = document.getElementById('cameraBox');
             if (!box) return;
             const d = Math.min(box.clientWidth, box.clientHeight) * AVATAR_GUIDE.sizeRatio;
             const cy = box.clientHeight * AVATAR_GUIDE.centerYRatio;
-            const zoomOut = Math.max(1, Number(AVATAR_GUIDE.zoomOut) || 1);
             box.style.setProperty('--guide-d', `${d}px`);
             box.style.setProperty('--guide-r', `${d / 2}px`);
             box.style.setProperty('--guide-cy', `${cy}px`);
-            box.style.setProperty('--cam-view-scale', String(1 / zoomOut));
+            layoutCameraPreview();   // may widen the ring (see avatarFraming)
         }
 
         function captureCroppedAvatar(video, box) {
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
-            if (!vw || !vh) return null;
-
-            const boxW = box.clientWidth;
-            const boxH = box.clientHeight;
-            const guideD = Math.min(boxW, boxH) * AVATAR_GUIDE.sizeRatio;
-            const cx = boxW / 2;
-            const cy = boxH * AVATAR_GUIDE.centerYRatio;
-            const boxLeft = cx - guideD / 2;
-            const boxTop = cy - guideD / 2;
-            const zoomOut = Math.max(1, Number(AVATAR_GUIDE.zoomOut) || 1);
-
-            // object-fit: cover mapping (no mirror — matches on-screen feed)
-            const scale = Math.max(boxW / vw, boxH / vh);
-            const visW = boxW / scale;
-            const visH = boxH / scale;
-            const visX = (vw - visW) / 2;
-            const visY = (vh - visH) / 2;
-            // Larger source square = zoomed-out avatar (clamped to frame)
-            let sSize = (guideD / scale) * zoomOut;
-            let sx = visX + boxLeft / scale - (sSize - guideD / scale) / 2;
-            let sy = visY + boxTop / scale - (sSize - guideD / scale) / 2;
-            const maxSize = Math.min(vw, vh);
-            if (sSize > maxSize) sSize = maxSize;
-            sx = Math.max(0, Math.min(sx, vw - sSize));
-            sy = Math.max(0, Math.min(sy, vh - sSize));
+            const f = avatarFraming(video, box);
+            if (!f.sSize) return null;
+            const { sx, sy, sSize } = f;
 
             const out = AVATAR_GUIDE.outputSize;
             const canvas = document.getElementById('captureCanvas');
             canvas.width = out;
             canvas.height = out;
             const ctx = canvas.getContext('2d');
+            // Mirrored, like the live view: the photo is exactly what was in the
+            // ring. An un-mirrored photo flipped the moment it was taken.
+            ctx.save();
+            ctx.translate(out, 0);
+            ctx.scale(-1, 1);
             ctx.drawImage(video, sx, sy, sSize, sSize, 0, 0, out, out);
+            ctx.restore();
             return canvas.toDataURL('image/jpeg', 0.9);
         }
 
         syncAvatarGuideMetrics();
         window.addEventListener('resize', syncAvatarGuideMetrics);
+        renderCameraZoom();
+        // A camera can switch resolution after it starts (some phones do); re-frame.
+        document.getElementById('webcamStream').addEventListener('resize', layoutCameraPreview);
+        document.getElementById('camZoomLevel').addEventListener('click', () => {
+            const info = document.getElementById('camZoomInfo');
+            info.hidden = !info.hidden;
+            layoutCameraPreview();
+        });
+        document.getElementById('camZoomOut').addEventListener('click', () => setCameraZoom(cameraZoom / CAMERA_ZOOM.step));
+        document.getElementById('camZoomIn').addEventListener('click', () => setCameraZoom(cameraZoom * CAMERA_ZOOM.step));
 
-        document.getElementById('snapBtn').addEventListener('click', () => {
+        /*
+         * Take Photo counts 3, 2, 1 over the ring, a second each, then snaps --
+         * time to look up and settle instead of being caught mid-tap. The
+         * button reads Cancel meanwhile.
+         */
+        const SNAP_COUNTDOWN_FROM = 3;
+        /* Time the screen is white before the photo is taken: long enough for
+           the camera's exposure to take in the extra light. */
+        const SNAP_FLASH_LEAD_MS = 250;
+        let snapCountdownTimer = null;
+
+        function cancelSnapCountdown() {
+            if (snapCountdownTimer) clearTimeout(snapCountdownTimer);
+            snapCountdownTimer = null;
+            const box = document.getElementById('cameraBox');
+            const count = document.getElementById('camCountdown');
+            if (box) box.classList.remove('is-counting');
+            if (count) { count.hidden = true; count.classList.remove('tick'); }
+            const flash = document.getElementById('screenFlash');
+            if (flash) flash.classList.remove('on');
+            const btn = document.getElementById('snapBtn');
+            if (btn && btn.innerText.toUpperCase() === 'CANCEL') btn.innerText = 'Take Photo!';
+        }
+
+        function snapNow() {
             const video = document.getElementById('webcamStream');
             const box = document.getElementById('cameraBox');
             const preview = document.getElementById('snapshotPreview');
             const btn = document.getElementById('snapBtn');
-            if (btn.innerText.toUpperCase() === "TAKE PHOTO!") {
-                syncAvatarGuideMetrics();
-                const dataUrl = captureCroppedAvatar(video, box);
-                if (!dataUrl) return;
-                base64AvatarData = dataUrl;
-                preview.src = base64AvatarData;
-                preview.style.display = 'block';
-                box.classList.add('is-previewing');
-                btn.innerText = "Retake";
+            syncAvatarGuideMetrics();
+            const dataUrl = captureCroppedAvatar(video, box);
+            if (!dataUrl) { btn.innerText = 'Take Photo!'; return; }
+            base64AvatarData = dataUrl;
+            preview.src = base64AvatarData;
+            preview.style.display = 'block';
+            box.classList.add('is-previewing');
+            btn.innerText = "Retake";
+        }
+
+        function startSnapCountdown() {
+            const box = document.getElementById('cameraBox');
+            const count = document.getElementById('camCountdown');
+            const btn = document.getElementById('snapBtn');
+            box.classList.add('is-counting');
+            btn.innerText = 'Cancel';
+            let n = SNAP_COUNTDOWN_FROM;
+            const tick = () => {
+                if (n === 0) {
+                    // Screen to white first, snap once the camera has had a
+                    // moment in the extra light, then let the white fade.
+                    box.classList.remove('is-counting');
+                    count.hidden = true;
+                    const flash = document.getElementById('screenFlash');
+                    flash.classList.add('on');
+                    snapCountdownTimer = setTimeout(() => {
+                        snapCountdownTimer = null;
+                        snapNow();
+                        flash.classList.remove('on');
+                    }, SNAP_FLASH_LEAD_MS);
+                    return;
+                }
+                count.textContent = String(n);
+                count.hidden = false;
+                count.classList.remove('tick'); void count.offsetWidth; count.classList.add('tick');
+                n -= 1;
+                snapCountdownTimer = setTimeout(tick, 1000);
+            };
+            tick();
+        }
+
+        document.getElementById('snapBtn').addEventListener('click', () => {
+            const box = document.getElementById('cameraBox');
+            const preview = document.getElementById('snapshotPreview');
+            const btn = document.getElementById('snapBtn');
+            const label = btn.innerText.toUpperCase();
+            if (label === 'CANCEL') {
+                cancelSnapCountdown();
+            } else if (label === "TAKE PHOTO!") {
+                startSnapCountdown();
             } else {
                 base64AvatarData = null;
                 preview.style.display = 'none';
@@ -3582,6 +3847,7 @@
         document.getElementById('addPlayerBtn').addEventListener('click', () => {
             const input = document.getElementById('playerNameInput'); const name = input.value.trim();
             if(name) {
+                cancelSnapCountdown();
                 sendAction({ action: 'ADD_PLAYER', name, avatar: base64AvatarData });
                 input.value = ''; base64AvatarData = null;
                 document.getElementById('snapshotPreview').style.display = 'none';
@@ -3714,7 +3980,7 @@
 
             const titleDisplay = document.getElementById('dynamicGameTitleDisplay');
             if (titleDisplay) {
-                titleDisplay.innerText = gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : gameKey.toUpperCase());
+                titleDisplay.innerText = gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : (gameKey === 'aroundtheworld' ? 'AROUND THE WORLD' : gameKey.toUpperCase()));
             }
             refreshCricketPlayerCapWarning(lastKnownControlState, gameKey);
             if (userTriggered) {
@@ -3794,6 +4060,110 @@
 
             grid.addEventListener('pointerup', endDrag);
             grid.addEventListener('pointercancel', endDrag);
+
+            /*
+             * Touch fallback. A touchscreen normally swipes this row with the
+             * browser's own scrolling (the pointer code above skips touch for
+             * that reason), but inside Fully Kiosk Browser on Android the row
+             * did not move at all (2026-10-01) while the same page swiped fine
+             * in Chrome. So: watch the finger with touch events -- they keep
+             * reporting even while a browser scrolls natively -- and only if
+             * it has gone sideways past the threshold while the row has NOT
+             * moved, drive the scroll from here, with a short glide on
+             * release. Wherever the browser scrolls by itself, this never
+             * takes over.
+             */
+            let touch = null;          // { id, startX, startY, startScroll, active, samples }
+            const TOUCH_DECIDE_PX = 40;
+            let glide = null;
+
+            function stopGlide() {
+                if (glide) cancelAnimationFrame(glide);
+                glide = null;
+            }
+
+            function startGlide(velocity) {           // px per ms, positive = content moves left
+                let v = velocity;
+                let last = performance.now();
+                const step = (now) => {
+                    const dt = Math.min(48, now - last);
+                    last = now;
+                    const before = grid.scrollLeft;
+                    grid.scrollLeft = before + v * dt;
+                    v *= Math.pow(0.94, dt / 16);
+                    if (Math.abs(v) < 0.02 || grid.scrollLeft === before) { glide = null; return; }
+                    glide = requestAnimationFrame(step);
+                };
+                glide = requestAnimationFrame(step);
+            }
+
+            grid.addEventListener('touchstart', (event) => {
+                stopGlide();
+                if (event.touches.length !== 1) { touch = null; return; }
+                const t = event.touches[0];
+                touch = {
+                    id: t.identifier, startX: t.clientX, startY: t.clientY,
+                    startScroll: grid.scrollLeft, active: false,
+                    samples: [{ x: t.clientX, t: event.timeStamp }]
+                };
+            }, { passive: true });
+
+            grid.addEventListener('touchmove', (event) => {
+                if (!touch) return;
+                const t = Array.from(event.changedTouches).find((c) => c.identifier === touch.id);
+                if (!t) return;
+                const dx = t.clientX - touch.startX;
+                const dy = t.clientY - touch.startY;
+                if (!touch.active) {
+                    // Decide late, and never block early. Chrome only commits
+                    // to a native scroll after the first touchmoves; blocking
+                    // one to take over would stop that scroll from ever
+                    // starting. So the decision waits until the finger has
+                    // gone TOUCH_DECIDE_PX, by when a native scroll has moved
+                    // the row (by the second touchmove, measured in Chrome).
+                    // The row's position is the test: event.cancelable can't
+                    // tell, because Chrome marks touchmoves after the first
+                    // non-cancelable whether or not anything scrolls.
+                    if (Math.abs(dx) < TOUCH_DECIDE_PX) return;
+                    if (Math.abs(dy) > Math.abs(dx) || grid.scrollLeft !== touch.startScroll) {
+                        touch = null;
+                        return;
+                    }
+                    touch.active = true;
+                    grid.classList.add('is-dragging');
+                }
+                // Ours now: keep anything else from acting on this swipe.
+                if (event.cancelable) event.preventDefault();
+                grid.scrollLeft = touch.startScroll - dx;
+                touch.samples.push({ x: t.clientX, t: event.timeStamp });
+                if (touch.samples.length > 6) touch.samples.shift();
+            }, { passive: false });
+
+            function endTouch(event) {
+                if (!touch) return;
+                const ended = touch;
+                touch = null;
+                if (!ended.active) return;
+                grid.classList.remove('is-dragging');
+                // The tap that ends a drag must not select a game.
+                const blockClick = (clickEvent) => {
+                    clickEvent.preventDefault();
+                    clickEvent.stopPropagation();
+                    grid.removeEventListener('click', blockClick, true);
+                };
+                grid.addEventListener('click', blockClick, true);
+                setTimeout(() => grid.removeEventListener('click', blockClick, true), 400);
+                // Glide on with the finger's last speed.
+                const a = ended.samples[0];
+                const b = ended.samples[ended.samples.length - 1];
+                const dt = b.t - a.t;
+                if (dt > 0 && event.timeStamp - b.t < 100) {
+                    const velocity = -(b.x - a.x) / dt;
+                    if (Math.abs(velocity) > 0.1) startGlide(velocity);
+                }
+            }
+            grid.addEventListener('touchend', endTouch, { passive: true });
+            grid.addEventListener('touchcancel', () => { touch = null; grid.classList.remove('is-dragging'); }, { passive: true });
         })();
 
         document.getElementById('btnSelectionBack').addEventListener('click', () => sendAction({ action: 'NAVIGATE', screen: 'REGISTRATION' }));
@@ -4080,8 +4450,10 @@
             const overlay = document.getElementById('quick10PickOverlay');
             const pickGrid = document.getElementById('quick10PickGrid');
 
-            if (lbBtn) lbBtn.style.display = isQuick10 ? '' : 'none';
-            if (spacer) spacer.style.display = isQuick10 ? 'none' : '';
+            // Quick 10's board, or any game that keeps one (state.leaderboard).
+            const hasBoard = isQuick10 || !!(state && state.currentScreen === 'IN_GAME' && state.leaderboard);
+            if (lbBtn) lbBtn.style.display = hasBoard ? '' : 'none';
+            if (spacer) spacer.style.display = hasBoard ? 'none' : '';
 
             const picking = isQuick10 && gd && gd.phase && gd.phase.type === 'pick_player';
             if (overlay) {
@@ -4383,19 +4755,12 @@
             sendAction({ action: 'BOARD_SET_LOG_PAUSED', paused: nextPaused });
         });
 
-        const lightsOnBtn = document.getElementById('lightsOnBtn');
-        if (lightsOnBtn) {
-            lightsOnBtn.addEventListener('click', () => sendAction({ action: 'LIGHTS_ON' }));
-            document.getElementById('lightsOffBtn').addEventListener('click', () => sendAction({ action: 'LIGHTS_OFF' }));
-            document.getElementById('lightsToggleBtn').addEventListener('click', () => sendAction({ action: 'LIGHTS_TOGGLE' }));
-            document.getElementById('lightsRefreshBtn').addEventListener('click', () => sendAction({ action: 'LIGHTS_REFRESH' }));
-        }
-
         // --- Configure modal (Registration screen only) ---
         const GAME_LABELS = {
             demolition: 'Demolition', limbo: 'Limbo', derby: 'Derby', killer: 'Killer',
             quackshot: 'Quackshot', shanghai: 'Shanghai',
             warmup: 'Warm Up', quick10: 'Quick 10', x01: 'X01', cricket: 'Cricket',
+            aroundtheworld: 'Around the World',
         };
         // Mirrors board/createBoardDriver.js's own fallback defaults — localhost,
         // assuming FlightDeck runs colocated with the engine.
@@ -4589,10 +4954,6 @@
         function handleSocketMessage(event) {
             try {
                 const payload = JSON.parse(event.data);
-                if (payload.type === 'LIGHTS_UPDATE') {
-                    renderLightsPanel(payload.data || {});
-                    return;
-                }
                 if (payload.type === 'BOARD_UPDATE' || payload.type === 'SCOLIA_UPDATE') {
                     renderScoliaPanel(payload.data || {});
                     return;
@@ -4667,7 +5028,7 @@
                     updateSelectedGameVisuals(gameKey, false);
                     if (state.currentScreen === 'IN_GAME') {
                         document.getElementById('hubActiveGameTitle').innerText =
-                            gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : gameKey.toUpperCase());
+                            gameKey === 'warmup' ? 'WARM UP' : (gameKey === 'quick10' ? 'QUICK 10' : (gameKey === 'aroundtheworld' ? 'AROUND THE WORLD' : gameKey.toUpperCase()));
                         syncDebugPreviewFilter(gameKey);
                     }
                 }
@@ -5493,5 +5854,6 @@
 
         connectSocket();
     </script>
+    <div class="screen-flash" id="screenFlash" aria-hidden="true"></div>
 </body>
 </html>

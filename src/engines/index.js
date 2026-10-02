@@ -846,8 +846,14 @@ function applyScheduledAction(gameData, action) {
             return warmupCommitVisit(gameData);
         case 'quick10_commit_visit':
             return quick10CommitVisit(gameData);
-        default:
+        default: {
+            // A game's own scheduled steps, declared as `scheduled` on its
+            // engine — so a new game adds its turn flow without a case here.
+            const engine = getEngine(gameData && gameData.gameType);
+            const step = engine && engine.scheduled && engine.scheduled[action.next];
+            if (typeof step === 'function') return step(gameData, action);
             return { gameData, schedule: null };
+        }
     }
 }
 
@@ -931,6 +937,16 @@ function debugSampleActor(gameData) {
 function buildDebugPreviewPhase(gameType, gameData, screen) {
     const actor = debugSampleActor(gameData);
     const label = actor.name;
+
+    // A game may build its own previews from the live lineup; null falls
+    // through to the shared screens below.
+    {
+        const engine = getEngine(gameType);
+        if (engine && typeof engine.debugPreviewPhase === 'function') {
+            const phase = engine.debugPreviewPhase(gameData || {}, screen, actor);
+            if (phase) return phase;
+        }
+    }
 
     switch (screen) {
         case 'clear':
@@ -1360,6 +1376,30 @@ function buildDebugPreviewPhase(gameType, gameData, screen) {
     }
 }
 
+/**
+ * A game's leaderboard, if it keeps one: { order: 'asc' | 'desc', unit, limit }.
+ * Declared as meta.leaderboard on the engine.
+ */
+function leaderboardSpec(gameType) {
+    const engine = getEngine(gameType);
+    const spec = engine && engine.meta && engine.meta.leaderboard;
+    return spec || null;
+}
+
+/**
+ * The leaderboard records a finished game produces — one per player who
+ * earned a place — or [] when the game keeps no leaderboard or is not over.
+ * The engine says when a result is final (gameData.resultReady), so a debug
+ * preview of the winner screen never lands on a leaderboard.
+ */
+function matchRecordsFor(gameData) {
+    if (!gameData || !gameData.resultReady) return [];
+    const engine = getEngine(gameData.gameType);
+    if (!engine || !leaderboardSpec(gameData.gameType)) return [];
+    if (typeof engine.buildMatchRecords !== 'function') return [];
+    return engine.buildMatchRecords(gameData) || [];
+}
+
 function initialMatchSchedule(gameData) {
     if (!gameData || !gameData.phase || gameData.phase.type !== 'round_announce') return null;
     const gt = gameData.gameType;
@@ -1386,6 +1426,8 @@ module.exports = {
     applyScheduledAction,
     buildDebugPreviewPhase,
     initialMatchSchedule,
+    leaderboardSpec,
+    matchRecordsFor,
     buildQuick10MatchRecord,
     buildProfiledThrowSpec,
     normalizeThrowProfileId,

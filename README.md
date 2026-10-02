@@ -13,8 +13,8 @@ and manage the match; a second screen (**Viewer**) for the big display
 everyone actually watches while playing. Obviously, you can just have a laptop
 next to you with two tabs open too.
 
-Ten games ship out of the box — Demolition, Limbo, Derby, Killer, Quackshot,
-Shanghai, Warm Up, Quick 10, X01, and Cricket — with
+Eleven games ship out of the box — Demolition, Limbo, Derby, Killer, Quackshot,
+Shanghai, Warm Up, Quick 10, X01, Cricket, and Around the World — with
 player registration, avatar capture, and per-venue configuration (idle
 timeouts, callout duration, which games are enabled).
 
@@ -61,7 +61,6 @@ Everything venue-specific lives in `data/` (gitignored, never committed):
 | `board.json` | Which board provider is active, and its host/port |
 | `venue.json` | Arena name, idle timeouts, dart-callout duration, which games are enabled |
 | `players.json` | Registered player roster + avatars |
-| `credentials.json` | Third-party device credentials (e.g. smart-plug dart lights) |
 | `scolia.json` | Scolia board credentials (`serialNumber` + `accessToken`), if using that provider |
 
 **None of these are created for you, and that is deliberate.** Running the app
@@ -127,8 +126,8 @@ voice with `dartCalloutVoice` in `data/venue.json`. Run
 
 ## Adding a game
 
-Application code lives in `src/` (`server.js`, the engines, board drivers and
-lights); `public/` is what the browser loads, and `data/` and `certs/` are
+Application code lives in `src/` (`server.js`, the engines and board
+drivers); `public/` is what the browser loads, and `data/` and `certs/` are
 created at runtime beside them.
 
 Each game is two files: one in `src/engines/` for the rules, scoring and timing,
@@ -143,10 +142,6 @@ replace the png files.  All images used for games came from stock photo sites.
 
 Working on front facing camera to capture key moments.  Will finish when I get
 back to it.
-
-There is a lighting module in the code (Tapo) that controls my LED lights.  It's
-not plumbed for other products but can be.  Probably best if you just control
-your own LEDs.
 
 
 ## License

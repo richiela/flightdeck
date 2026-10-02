@@ -31,6 +31,8 @@ An engine exports whatever it needs of:
 | `aimNumber(gameData)` | what a bot aims at; omit for "no opinion" |
 | `aimedThrow(gameData, profileId, roll)` | aim in some way other than at a number |
 | `activeThrower(gameData)` | who is throwing, when it is not the singles default |
+| `scheduled` | `{ '<game>_<step>': (gameData, action) => result }` — the game's own timed steps; `applyScheduledAction` falls back to these, so they need no case in `index.js` |
+| `debugPreviewPhase(gameData, screen, actor)` | a debug preview built from the live lineup; return null to use the shared screens |
 | `meta` | round vocabulary — see below |
 
 Everything is optional. A game that exports only `init` and `handleThrow` works.

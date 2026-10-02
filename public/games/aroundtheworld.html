@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/games/shared-player-theme.css">
+    <link rel="stylesheet" href="/games/event-videos.css">
+    <script src="/games/shared-player-theme.js"></script>
+    <link rel="stylesheet" href="/games/dart-callout.css">
+    <script src="/games/dart-callout.js"></script>
+    <script src="/games/dart-announcer.js"></script>
+    <script src="/games/event-videos.js"></script>
+    <title>Around the World</title>
+    <style>
+        /* Vintage air travel: ocean at dusk, a paper flight plan with an airmail
+           border, boarding passes for the takeovers, a passport stamp for home. */
+        :root {
+            --paper: #f4ead5;
+            --paper-deep: #e7d7b4;
+            --ink: #1d2b38;
+            --ink-soft: rgba(29, 43, 56, 0.55);
+            --airmail-red: #d23a3a;
+            --airmail-blue: #1f4f9c;
+            --brass: #e2a93b;
+            --brass-bright: #ffd27a;
+            --sea: #1d7486;
+            --stamp: #b3261e;
+            --page-bg: radial-gradient(circle at 50% 28%, #1d7486 0%, #0f4a5a 42%, #07222c 100%);
+            --airmail-border: repeating-linear-gradient(135deg,
+                var(--airmail-red) 0 14px, var(--paper) 14px 22px,
+                var(--airmail-blue) 22px 36px, var(--paper) 36px 44px);
+            --pass-font: 'Courier New', Courier, monospace;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: var(--page-bg);
+            color: #fff;
+            font-family: var(--fc-font);
+            overflow: hidden; user-select: none;
+            box-sizing: border-box;
+        }
+
+        .master-frame {
+            position: absolute;
+            top: 15px; left: 15px; right: 15px; bottom: 15px;
+            border: 4px solid rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 90;
+        }
+        .master-frame::before {
+            content: '';
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px dotted rgba(255, 255, 255, 0.45);
+            border-radius: 8px;
+        }
+        .window-game-title {
+            position: absolute;
+            bottom: -14px; left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: #fff;
+            padding: 2px 20px;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            z-index: 100;
+            border-left: 4px solid #fff;
+            border-right: 4px solid #fff;
+        }
+
+        .arena {
+            position: relative;
+            width: 100%; height: 100%;
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            padding: 48px 36px 52px;
+            box-sizing: border-box;
+            gap: 28px;
+        }
+
+        /* —— Left: travellers —— */
+        .score-pane {
+            flex: 1.15;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: visible;
+        }
+
+        /* .team-row / .active-turn / .color-N are the shared player-theme hooks
+           (active glow per player colour), same as Shanghai's rows. */
+        .team-row {
+            display: grid;
+            grid-template-columns: minmax(120px, 200px) 1fr auto;
+            align-items: center;
+            gap: 16px;
+            padding: var(--atw-row-pad-v, 10px) 14px;
+            border-radius: 10px;
+            background: transparent;
+            transition: background 0.25s ease;
+            overflow: visible;
+        }
+        /* Two full badges plus the team's dart bracket need ~260px; the route
+           strip still has room for all 21 stops beside them. */
+        .score-pane.is-doubles .team-row {
+            grid-template-columns: 270px 1fr auto;
+        }
+        .team-row.active-turn {
+            background: rgba(255, 255, 255, 0.14);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+        }
+        .team-row.is-home { background: rgba(226, 169, 59, 0.10); }
+        .team-row.is-home.active-turn { background: rgba(226, 169, 59, 0.2); }
+
+        .team-identity {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            position: relative;
+            padding-bottom: var(--atw-identity-pad-b, 14px);
+        }
+        .team-identity:not(.is-duo) .fc-player-badge {
+            transform: scale(var(--atw-avatar-scale, 0.82));
+            transform-origin: left center;
+        }
+        .team-identity .dart-dots {
+            display: flex;
+            flex-direction: column;
+            gap: var(--fc-dart-stack-gap);
+            margin-left: -20px;
+        }
+        .team-identity .dot {
+            width: var(--fc-dart-dot-size);
+            height: var(--fc-dart-dot-size);
+            border-radius: 50%;
+            box-sizing: border-box;
+        }
+        .team-identity.is-duo .fc-duo-row {
+            --fc-duo-pull: 14px;
+            --fc-duo-dart-gap: -4px;
+        }
+        .team-identity.is-duo .fc-duo-row.is-duo {
+            position: relative;
+            justify-content: flex-start;
+            width: max-content;
+        }
+        .team-identity.is-duo .fc-duo-darts {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: var(--fc-duo-dart-gap);
+            opacity: 0;
+            transition: opacity 0.3s, margin-left 0.15s;
+            padding: 6px 4px;
+            border-radius: 0 4px 4px 0;
+            border: 2px solid #fff;
+            border-left: none;
+            pointer-events: none;
+        }
+        .team-row.active-turn .team-identity.is-duo .fc-duo-darts { opacity: 1; }
+
+        /* The route as a strip of stops, joined by a flight line. */
+        .route-strip {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(var(--stops, 21), minmax(0, 1fr));
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+        }
+        .route-strip::before {
+            content: '';
+            position: absolute;
+            left: 10px; right: 10px; top: 50%;
+            border-top: 2px dashed rgba(255, 255, 255, 0.28);
+            transform: translateY(-50%);
+        }
+        .stop {
+            position: relative;
+            z-index: 1;
+            aspect-ratio: 1;
+            max-width: 40px;
+            width: 100%;
+            justify-self: center;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(0.62rem, 0.95vw, 0.95rem);
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.5);
+            background: rgba(7, 34, 44, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.22);
+            box-sizing: border-box;
+            transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+        .stop.is-cleared {
+            color: #0b1a22;
+            background: rgb(var(--row-rgb));
+            border-color: rgba(255, 255, 255, 0.55);
+        }
+        .stop.is-next {
+            color: #fff;
+            background: rgba(var(--row-rgb), 0.28);
+            border-color: #fff;
+            box-shadow: 0 0 0 3px rgba(var(--row-rgb), 0.55), 0 0 14px rgba(var(--row-rgb), 0.8);
+        }
+        .team-row.active-turn .stop.is-next { animation: atwStopPulse 1.6s ease-in-out infinite; }
+        .stop.is-bull { font-size: clamp(0.55rem, 0.8vw, 0.8rem); }
+
+        .route-stamp {
+            position: absolute;
+            z-index: 2;
+            right: 6%;
+            top: 50%;
+            transform: translateY(-50%) rotate(-8deg);
+            padding: 4px 14px;
+            border: 3px solid var(--brass-bright);
+            border-radius: 6px;
+            color: var(--brass-bright);
+            background: rgba(7, 34, 44, 0.78);
+            font-family: var(--pass-font);
+            font-weight: 900;
+            font-size: 1.05rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        }
+
+        .tally {
+            min-width: 4.4em;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            line-height: 1;
+        }
+        .tally-num {
+            font-size: 2.6rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+            font-variant-numeric: tabular-nums;
+        }
+        .tally-cap {
+            margin-top: 4px;
+            font-size: 0.72rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+        }
+        .team-row.is-home .tally-num { color: var(--brass-bright); }
+
+        /* —— Right: the flight plan —— */
+        .plan-pane {
+            flex: 0 0 min(600px, 46vw);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+        }
+        .plan-card {
+            position: relative;
+            width: 100%;
+            max-width: 580px;
+            padding: 12px;
+            border-radius: 10px;
+            background: var(--airmail-border);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+            box-sizing: border-box;
+        }
+        .plan-inner {
+            background: linear-gradient(180deg, #f8efdc 0%, var(--paper) 50%, var(--paper-deep) 100%);
+            color: var(--ink);
+            border-radius: 4px;
+            padding: 18px 22px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: inset 0 0 40px rgba(139, 105, 40, 0.14);
+        }
+        .plan-head {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: end;
+            gap: 12px;
+            border-bottom: 2px dashed rgba(29, 43, 56, 0.28);
+            padding-bottom: 10px;
+        }
+        .plan-eyebrow {
+            font-family: var(--pass-font);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--ink-soft);
+            text-transform: uppercase;
+        }
+        .plan-name {
+            font-size: 1.7rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .plan-next {
+            text-align: right;
+            line-height: 1;
+        }
+        .plan-next .plan-eyebrow { display: block; margin-bottom: 4px; }
+        .plan-next-stop {
+            font-size: 3.4rem;
+            font-weight: 900;
+            color: var(--airmail-red);
+            letter-spacing: 1px;
+            font-variant-numeric: tabular-nums;
+        }
+        .plan-next-stop.is-bull { font-size: 2.6rem; }
+
+        .board-stage {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .board-wrap {
+            position: relative;
+            width: min(470px, 100%);
+            aspect-ratio: 1;
+        }
+        .route-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: visible;
+        }
+        .board-face { fill: #fbf4e4; stroke: var(--ink); stroke-width: 1.4; }
+        .wedge { stroke: rgba(29, 43, 56, 0.35); stroke-width: 0.5; transition: fill 0.35s ease; }
+        .ring-line { fill: none; stroke: rgba(29, 43, 56, 0.4); stroke-width: 0.6; }
+        .board-num { font-family: var(--fc-font); font-weight: 900; font-size: 8.5px; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+        .board-num.is-cleared { fill: rgba(29, 43, 56, 0.35); }
+        .board-num.is-next { fill: var(--airmail-red); font-size: 12px; }
+        .bull-disc { fill: #fbf4e4; stroke: var(--ink); stroke-width: 0.8; }
+        .bull-disc.is-next { fill: var(--brass-bright); }
+        .leg { fill: none; stroke-linecap: round; }
+        .leg.is-flown { stroke-width: 1.6; opacity: 0.85; }
+        .leg.is-ahead { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 3 3; animation: atwLegDash 1.1s linear infinite; }
+        .node { stroke: var(--ink); stroke-width: 0.8; }
+        .node.is-next { fill: var(--brass-bright); stroke: var(--airmail-red); stroke-width: 1.4; }
+        .plane { fill: var(--ink); stroke: #fbf4e4; stroke-width: 0.6; }
+        .next-glow { fill: none; stroke: var(--airmail-red); stroke-width: 1.2; opacity: 0.8; transform-box: fill-box; transform-origin: center; animation: atwRing 1.6s ease-out infinite; }
+
+        .visit-row {
+            display: grid;
+            grid-template-columns: auto repeat(3, 1fr);
+            align-items: center;
+            gap: 10px;
+            border-top: 2px dashed rgba(29, 43, 56, 0.28);
+            padding-top: 12px;
+        }
+        .visit-row .plan-eyebrow { white-space: nowrap; }
+        .ticket {
+            height: 46px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1.35rem;
+            letter-spacing: 1px;
+            border: 2px dashed rgba(29, 43, 56, 0.3);
+            color: rgba(29, 43, 56, 0.35);
+            box-sizing: border-box;
+        }
+        .ticket.is-hit {
+            border: 2px solid var(--airmail-blue);
+            background: rgba(31, 79, 156, 0.1);
+            color: var(--airmail-blue);
+        }
+        .ticket.is-hit::after { content: ' ✓'; }
+        .ticket.is-miss {
+            border: 2px solid rgba(29, 43, 56, 0.35);
+            color: rgba(29, 43, 56, 0.6);
+            background: rgba(29, 43, 56, 0.05);
+            text-decoration: line-through;
+            text-decoration-thickness: 2px;
+        }
+        .plan-foot {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--pass-font);
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--ink-soft);
+            text-transform: uppercase;
+        }
+
+        /* —— Rules —— */
+        .help-overlay-board {
+            position: absolute;
+            top: 80px; left: 50%; transform: translateX(-50%);
+            width: 540px; max-width: 90%;
+            background: rgba(7, 26, 34, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 14px;
+            padding: 28px 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+            z-index: 10000;
+            display: none;
+            text-align: center;
+        }
+        .help-overlay-board.visible { display: block; animation: atwFade 0.2s ease; }
+        .help-overlay-board h3 {
+            margin: 0 0 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--brass-bright);
+        }
+        .help-overlay-board p {
+            margin: 0 0 10px;
+            line-height: 1.45;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 0.95rem;
+            text-align: left;
+        }
+
+        /* —— Takeovers: boarding passes + passport stamp —— */
+        .atw-takeover {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            pointer-events: none;
+            background:
+                radial-gradient(ellipse at 50% 35%, rgba(29, 116, 134, 0.45), transparent 60%),
+                rgba(4, 18, 24, 0.88);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .atw-takeover.active {
+            display: flex;
+            pointer-events: auto;
+            animation: atwFade 0.28s ease forwards;
+        }
+        .atw-takeover.mode-landed.active,
+        .atw-takeover.mode-winner.active {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(226, 169, 59, 0.32), transparent 55%),
+                radial-gradient(ellipse at 50% 75%, rgba(29, 116, 134, 0.35), transparent 55%),
+                rgba(4, 14, 20, 0.93);
+        }
+        .atw-takeover.mode-winner.active { z-index: 600; }
+
+        .atw-fx { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+        .atw-paper-plane {
+            position: absolute;
+            width: var(--size, 34px);
+            height: var(--size, 34px);
+            opacity: 0;
+        }
+        .atw-paper-plane svg { width: 100%; height: 100%; display: block; }
+        .atw-takeover.active .atw-paper-plane {
+            animation: atwGlide var(--dur, 6s) linear var(--delay, 0s) infinite;
+        }
+        .atw-confetti {
+            position: absolute;
+            width: var(--w, 10px);
+            height: var(--h, 6px);
+            background: var(--c, var(--airmail-red));
+            opacity: 0;
+        }
+        .atw-takeover.active .atw-confetti {
+            animation: atwFall var(--dur, 4.5s) linear var(--delay, 0s) infinite;
+        }
+
+        .atw-pass {
+            position: relative;
+            z-index: 3;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            width: min(760px, 88vw);
+            padding: 10px;
+            border-radius: 14px;
+            background: var(--airmail-border);
+            box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transform: translateY(40px) rotate(-1.5deg);
+        }
+        .atw-takeover.active .atw-pass {
+            animation: atwPassIn 0.55s cubic-bezier(0.2, 0.85, 0.25, 1.05) 0.05s forwards;
+        }
+        .atw-pass-main,
+        .atw-pass-stub {
+            background: linear-gradient(180deg, #f8efdc 0%, var(--paper) 55%, var(--paper-deep) 100%);
+            color: var(--ink);
+        }
+        .atw-pass-main {
+            border-radius: 6px 0 0 6px;
+            padding: 26px 30px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            text-align: center;
+            min-width: 0;
+        }
+        .atw-pass-stub {
+            border-radius: 0 6px 6px 0;
+            border-left: 3px dashed rgba(29, 43, 56, 0.4);
+            padding: 110px 26px 24px;
+            width: 200px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-align: center;
+        }
+        .atw-eyebrow {
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1rem;
+            letter-spacing: 4px;
+            color: var(--ink-soft);
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .atw-avatar-ring {
+            width: calc(var(--fc-avatar-overlay) + 14px);
+            height: calc(var(--fc-avatar-overlay) + 14px);
+            border-radius: 50%;
+            border: 4px solid var(--ink);
+            box-shadow: 0 0 0 5px var(--brass), 0 10px 24px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fbf4e4;
+            overflow: hidden;
+        }
+        .atw-avatar-ring.is-group {
+            width: auto; height: auto; border: none; box-shadow: none; background: transparent;
+            border-radius: 0; overflow: visible; gap: 18px;
+        }
+        .atw-avatar {
+            width: var(--fc-avatar-overlay);
+            height: var(--fc-avatar-overlay);
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e9dcc0;
+        }
+        .atw-avatar-ring.is-group .atw-avatar {
+            width: 150px; height: 150px;
+            border: 4px solid var(--ink);
+            box-shadow: 0 0 0 4px var(--brass);
+        }
+        .atw-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .atw-avatar .initials {
+            font-size: 3.4rem; font-weight: 900; color: var(--fc-initials);
+        }
+        .atw-group-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .atw-group-name { font-weight: 900; font-size: 1.2rem; text-transform: uppercase; }
+        .atw-name {
+            margin: 0;
+            font-size: 2.6rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1.05;
+        }
+        .atw-quip {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--airmail-blue);
+        }
+        .atw-banner {
+            display: none;
+            padding: 6px 16px;
+            background: var(--airmail-red);
+            color: #fff;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1.05rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            border-radius: 4px;
+        }
+        .atw-banner.visible { display: inline-block; }
+        .atw-stub-label {
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 3px;
+            color: var(--ink-soft);
+            text-transform: uppercase;
+        }
+        .atw-stub-big {
+            font-size: 5.2rem;
+            font-weight: 900;
+            line-height: 0.95;
+            color: var(--airmail-red);
+            font-variant-numeric: tabular-nums;
+        }
+        .atw-stub-big.is-word { font-size: 3.2rem; }
+        .mode-next .atw-pass-stub { padding-top: 26px; }
+        .atw-stub-sub {
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 0.92rem;
+            white-space: nowrap;
+            letter-spacing: 1px;
+            color: var(--ink);
+        }
+
+        .atw-standings {
+            display: none;
+            width: 100%;
+            margin: 4px 0 0;
+            padding: 10px 0 0;
+            border-top: 2px dashed rgba(29, 43, 56, 0.28);
+            list-style: none;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1.05rem;
+            text-align: left;
+        }
+        .atw-standings.visible { display: grid; gap: 4px; }
+        .atw-standings li {
+            display: grid;
+            grid-template-columns: 2.2em 1fr auto;
+            gap: 10px;
+            align-items: baseline;
+        }
+        .atw-standings .pl { color: var(--ink-soft); }
+        .atw-standings .nm { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .atw-standings .rs { text-align: right; font-variant-numeric: tabular-nums; }
+        .atw-standings li.is-top .nm,
+        .atw-standings li.is-top .rs { color: var(--airmail-red); }
+
+        /* Passport stamp — slams onto the pass on LANDED / winner */
+        .atw-stamp {
+            position: absolute;
+            z-index: 5;
+            /* On the stub, above its number, like an exit stamp on a ticket. */
+            top: 34px;
+            right: 26px;
+            padding: 6px 12px;
+            border: 5px double var(--stamp);
+            border-radius: 12px;
+            color: var(--stamp);
+            font-family: var(--pass-font);
+            font-weight: 900;
+            font-size: 1.5rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            background: rgba(248, 239, 220, 0.4);
+            opacity: 0;
+            transform: rotate(-14deg) scale(2.2);
+            pointer-events: none;
+            mix-blend-mode: multiply;
+        }
+        .atw-stamp small {
+            display: block;
+            font-size: 0.72rem;
+            letter-spacing: 3px;
+            text-align: center;
+        }
+        .mode-landed .atw-stamp,
+        .mode-winner .atw-stamp,
+        .mode-draw .atw-stamp { display: block; }
+        .mode-next .atw-stamp { display: none; }
+        .atw-takeover.active .atw-stamp {
+            animation: atwStamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.5s forwards;
+        }
+
+        /* —— Leaderboard: a departures board —— */
+        .atw-board {
+            position: fixed;
+            inset: 0;
+            z-index: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(3, 12, 16, 0.86);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .atw-board.visible { display: flex; animation: atwFade 0.25s ease; }
+        .atw-board-panel {
+            width: min(1080px, 88vw);
+            padding: 26px 30px 22px;
+            border-radius: 12px;
+            background: #0b0f12;
+            border: 3px solid #2a3238;
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), inset 0 0 0 2px #151b20;
+        }
+        .atw-board-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 20px;
+            padding-bottom: 14px;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2a3238;
+        }
+        .atw-board-title {
+            margin: 0;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 2rem;
+            letter-spacing: 6px;
+            color: var(--brass-bright);
+            text-transform: uppercase;
+        }
+        .atw-board-sub {
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1rem;
+            letter-spacing: 3px;
+            color: rgba(255, 210, 122, 0.55);
+            text-transform: uppercase;
+        }
+        .atw-board-cols,
+        .atw-board-row {
+            display: grid;
+            /* rem, not em: the header and the rows differ in font size. */
+            grid-template-columns: 3rem minmax(0, 1fr) 8rem 11rem;
+            gap: 14px;
+            align-items: center;
+        }
+        .atw-board-cols {
+            padding: 0 12px 8px;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 0.85rem;
+            letter-spacing: 3px;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+        }
+        .atw-board-list { display: grid; gap: 6px; }
+        .atw-board-row {
+            padding: 8px 12px;
+            border-radius: 4px;
+            background: linear-gradient(180deg, #161c21 0 49%, #0f1418 51% 100%);
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1.55rem;
+            letter-spacing: 2px;
+            color: var(--brass-bright);
+            text-transform: uppercase;
+        }
+        .atw-board-row .rk { color: rgba(255, 210, 122, 0.6); }
+        .atw-board-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f4ead5; }
+        .atw-board-row .sc { text-align: right; font-variant-numeric: tabular-nums; }
+        .atw-board-row .dt { text-align: right; font-size: 1rem; color: rgba(255, 255, 255, 0.5); letter-spacing: 1px; }
+        .atw-board-row.is-top .sc,
+        .atw-board-row.is-top .nm { color: #fff; }
+        .atw-board-row.is-top { box-shadow: inset 4px 0 0 var(--brass); }
+        .atw-board-row .flag {
+            margin-left: 10px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            vertical-align: middle;
+            color: #0b0f12;
+            background: rgba(255, 210, 122, 0.7);
+        }
+        .atw-board-empty {
+            padding: 30px 12px;
+            text-align: center;
+            font-family: var(--pass-font);
+            font-weight: 700;
+            font-size: 1.3rem;
+            letter-spacing: 3px;
+            color: rgba(255, 210, 122, 0.55);
+            text-transform: uppercase;
+        }
+
+        @keyframes atwFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes atwStopPulse {
+            0%, 100% { box-shadow: 0 0 0 3px rgba(var(--row-rgb), 0.55), 0 0 10px rgba(var(--row-rgb), 0.6); }
+            50% { box-shadow: 0 0 0 5px rgba(var(--row-rgb), 0.75), 0 0 22px rgba(var(--row-rgb), 1); }
+        }
+        @keyframes atwLegDash { to { stroke-dashoffset: -12; } }
+        @keyframes atwRing {
+            0% { transform: scale(0.7); opacity: 0.9; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        @keyframes atwPassIn {
+            to { opacity: 1; transform: translateY(0) rotate(0deg); }
+        }
+        @keyframes atwStamp {
+            0% { opacity: 0; transform: rotate(-14deg) scale(2.2); }
+            70% { opacity: 0.95; transform: rotate(-10deg) scale(0.94); }
+            100% { opacity: 0.9; transform: rotate(-10deg) scale(1); }
+        }
+        @keyframes atwGlide {
+            0% { opacity: 0; transform: translate(0, 0) rotate(var(--rot, -12deg)); }
+            8% { opacity: 0.9; }
+            90% { opacity: 0.9; }
+            100% { opacity: 0; transform: translate(var(--dx, 120vw), var(--dy, -30vh)) rotate(var(--rot, -12deg)); }
+        }
+        @keyframes atwFall {
+            0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+            10% { opacity: 1; }
+            100% { opacity: 0.2; transform: translate(var(--drift, 30px), 115vh) rotate(540deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .team-row.active-turn .stop.is-next,
+            .leg.is-ahead,
+            .next-glow,
+            .atw-paper-plane,
+            .atw-confetti { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="master-frame">
+        <div class="window-game-title">Around the World</div>
+    </div>
+
+    <div class="help-overlay-board" id="helpOverlayCard">
+        <h3>Around the World</h3>
+        <p>• Hit 1, then 2, then 3 … all the way to 20 — then the bull to come home.</p>
+        <p>• Any part of the number counts: single, double or treble. Either bull finishes.</p>
+        <p>• Three darts a visit. Hit your stop and aim straight at the next one.</p>
+        <p>• Your score is the number of darts it takes. Fewest darts wins.</p>
+        <p>• When someone lands, everyone left in that round gets their last visit.</p>
+    </div>
+
+    <div class="arena">
+        <div class="score-pane" id="scorePane"></div>
+
+        <div class="plan-pane">
+            <div class="plan-card">
+                <div class="plan-inner">
+                    <div class="plan-head">
+                        <div>
+                            <div class="plan-eyebrow">Flight plan</div>
+                            <div class="plan-name" id="planName">—</div>
+                        </div>
+                        <div class="plan-next">
+                            <span class="plan-eyebrow" id="planNextLabel">Next stop</span>
+                            <span class="plan-next-stop" id="planNextStop">1</span>
+                        </div>
+                    </div>
+                    <div class="board-stage">
+                        <div class="board-wrap">
+                            <svg class="route-svg" id="routeSvg" viewBox="0 0 240 240" aria-hidden="true"></svg>
+                        </div>
+                    </div>
+                    <div class="visit-row">
+                        <span class="plan-eyebrow">This visit</span>
+                        <div class="ticket" id="ticket0"></div>
+                        <div class="ticket" id="ticket1"></div>
+                        <div class="ticket" id="ticket2"></div>
+                    </div>
+                    <div class="plan-foot">
+                        <span id="planLegs">Stop 1 of 21</span>
+                        <span id="planDarts">0 darts</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="atw-takeover" id="atwOverlay" style="--fd-winner-video-border: #e2a93b;">
+        <div class="atw-fx" id="atwFx" aria-hidden="true"></div>
+        <div class="fd-winner-split">
+            <div class="fd-winner-stage">
+                <div class="atw-pass" id="atwPass">
+                    <div class="atw-stamp" id="atwStamp">Landed<small id="atwStampSub">Home</small></div>
+                    <div class="atw-pass-main">
+                        <p class="atw-eyebrow" id="atwEyebrow">Now boarding</p>
+                        <span class="atw-banner" id="atwBanner">Last call</span>
+                        <div class="atw-avatar-ring" id="atwAvatarRing"><div id="atwAvatarHost"></div></div>
+                        <h1 class="atw-name" id="atwName">PLAYER</h1>
+                        <p class="atw-quip" id="atwQuip"></p>
+                        <ol class="atw-standings" id="atwStandings"></ol>
+                    </div>
+                    <div class="atw-pass-stub">
+                        <span class="atw-stub-label" id="atwStubLabel">Next stop</span>
+                        <span class="atw-stub-big" id="atwStubBig">1</span>
+                        <span class="atw-stub-sub" id="atwStubSub"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="fd-winner-video-pane">
+                <video id="winnerVideo" class="fd-winner-video" playsinline preload="auto"></video>
+            </div>
+        </div>
+    </div>
+
+    <div class="atw-board" id="atwBoard" aria-hidden="true">
+        <div class="atw-board-panel">
+            <div class="atw-board-head">
+                <h2 class="atw-board-title">Fastest round the world</h2>
+                <span class="atw-board-sub">Fewest darts</span>
+            </div>
+            <div class="atw-board-cols"><span>#</span><span>Traveller</span><span style="text-align:right">Darts</span><span style="text-align:right">Date</span></div>
+            <div class="atw-board-list" id="atwBoardList"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const DARTBOARD_WHEEL = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+            const SVG_NS = 'http://www.w3.org/2000/svg';
+            const CX = 120;
+            const CY = 120;
+            const FACE_R = 96;
+            const NUM_R = 108;
+            const TRIPLE_IN = FACE_R * 0.58;
+            const TRIPLE_OUT = FACE_R * 0.63;
+            const DOUBLE_IN = FACE_R * 0.95;
+            const BULL_R = FACE_R * 0.09;
+            /* Stops sit in the outer single bed; the bull is home, at the centre. */
+            const NODE_R = FACE_R * 0.8;
+            const PLANE_PATH = 'M12 2c.8 0 1.2.8 1.2 1.6V9l7.8 4.5v2l-7.8-2.5v5.2l2.3 1.8v1.5L12 20.6l-3.5.9V20l2.3-1.8V13L3 15.5v-2L10.8 9V3.6C10.8 2.8 11.2 2 12 2z';
+            const esc = (v) => (window.FC_escapeHtml ? FC_escapeHtml(v) : String(v == null ? '' : v));
+
+            let lastPhaseKey = '';
+            let lastBoardKey = '';
+
+            function playerRgb(colorIdx) {
+                const hex = (window.FC_PLAYER_COLORS || [])[colorIdx % 8] || '#ffffff';
+                const n = parseInt(String(hex).replace('#', ''), 16);
+                return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+            }
+            function rgba(rgb, a) { return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`; }
+            function polar(r, deg) {
+                const rad = (deg * Math.PI) / 180;
+                return { x: CX + r * Math.sin(rad), y: CY - r * Math.cos(rad) };
+            }
+            function wedgePath(innerR, outerR, start, end) {
+                const a = polar(outerR, start), b = polar(outerR, end);
+                const c = polar(innerR, end), d = polar(innerR, start);
+                return `M ${a.x} ${a.y} A ${outerR} ${outerR} 0 0 1 ${b.x} ${b.y} L ${c.x} ${c.y} A ${innerR} ${innerR} 0 0 0 ${d.x} ${d.y} Z`;
+            }
+            function stopAngle(stop) {
+                const idx = DARTBOARD_WHEEL.indexOf(Number(stop));
+                return idx < 0 ? null : idx * (360 / DARTBOARD_WHEEL.length);
+            }
+            /** Where a stop sits on the map: its bed, or the centre for the bull. */
+            function stopPoint(stop) {
+                if (stop === 'bull' || stop == null) return { x: CX, y: CY };
+                const deg = stopAngle(stop);
+                return deg == null ? { x: CX, y: CY } : polar(NODE_R, deg);
+            }
+            function stopText(stop) { return stop === 'bull' ? 'BULL' : String(stop); }
+            function el(tag, attrs, parent) {
+                const node = document.createElementNS(SVG_NS, tag);
+                Object.keys(attrs || {}).forEach((k) => node.setAttribute(k, attrs[k]));
+                if (parent) parent.appendChild(node);
+                return node;
+            }
+            /** A leg bows sideways like a flight path on a map rather than cutting a chord. */
+            function legPath(a, b) {
+                const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+                const dx = b.x - a.x, dy = b.y - a.y;
+                const len = Math.hypot(dx, dy) || 1;
+                const bow = Math.min(22, len * 0.18);
+                const cx = mx - (dy / len) * bow, cy = my + (dx / len) * bow;
+                return { d: `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`, cx, cy };
+            }
+
+            function activePlayer(gd) {
+                return (gd.players || [])[gd.activeIdx] || null;
+            }
+            /** In doubles the name on the plan is whoever is throwing this visit. */
+            function throwerName(gd, idx) {
+                const p = (gd.players || [])[idx];
+                if (!p) return '';
+                const members = Array.isArray(p.members) && p.members.length ? p.members : null;
+                if (!gd.isDoublesLineup || !members) return p.name || 'PLAYER';
+                const ti = (gd.throwerIndices && gd.throwerIndices[idx]) || 0;
+                return (members[ti % members.length] || members[0]).name || 'PLAYER';
+            }
+
+            /* —— Route map —— */
+            function buildRouteMap(gd) {
+                const svg = document.getElementById('routeSvg');
+                const route = gd.route || [];
+                const player = activePlayer(gd);
+                const colorIdx = gd.activeIdx || 0;
+                const rgb = playerRgb(colorIdx);
+                const cleared = player ? Math.min(player.stopIdx || 0, route.length) : 0;
+                const done = !!(player && player.finished);
+                const nextStop = done ? null : route[cleared];
+                const clearedSet = new Set(route.slice(0, cleared).map(String));
+
+                svg.innerHTML = '';
+                el('circle', { cx: CX, cy: CY, r: FACE_R, class: 'board-face' }, svg);
+
+                const slice = 360 / DARTBOARD_WHEEL.length;
+                DARTBOARD_WHEEL.forEach((num, i) => {
+                    const start = i * slice - slice / 2;
+                    const end = start + slice;
+                    const isCleared = clearedSet.has(String(num));
+                    const isNext = String(nextStop) === String(num);
+                    let fill = i % 2 ? 'rgba(29, 43, 56, 0.07)' : 'rgba(29, 43, 56, 0.02)';
+                    if (isCleared) fill = rgba(rgb, 0.42);
+                    if (isNext) fill = 'rgba(226, 169, 59, 0.55)';
+                    el('path', { d: wedgePath(BULL_R, FACE_R, start, end), class: 'wedge', fill }, svg);
+                    const pos = polar(NUM_R, i * slice);
+                    const t = el('text', {
+                        x: pos.x, y: pos.y,
+                        class: `board-num${isCleared ? ' is-cleared' : ''}${isNext ? ' is-next' : ''}`
+                    }, svg);
+                    t.textContent = String(num);
+                });
+                [TRIPLE_IN, TRIPLE_OUT, DOUBLE_IN].forEach((r) => el('circle', { cx: CX, cy: CY, r, class: 'ring-line' }, svg));
+                el('circle', {
+                    cx: CX, cy: CY, r: BULL_R,
+                    class: `bull-disc${nextStop === 'bull' ? ' is-next' : ''}`
+                }, svg);
+
+                // Flown legs: home (the bull) out to 1, then stop to stop.
+                let from = { x: CX, y: CY };
+                for (let i = 0; i < cleared; i++) {
+                    const to = stopPoint(route[i]);
+                    el('path', { d: legPath(from, to).d, class: 'leg is-flown', stroke: rgba(rgb, 1) }, svg);
+                    from = to;
+                }
+                // Stop markers: flown ones in the traveller's colour.
+                route.forEach((stop, i) => {
+                    if (stop === 'bull') return;
+                    const p = stopPoint(stop);
+                    const isNext = !done && i === cleared;
+                    el('circle', {
+                        cx: p.x, cy: p.y, r: isNext ? 4.2 : 2.6,
+                        class: `node${isNext ? ' is-next' : ''}`,
+                        fill: i < cleared ? rgba(rgb, 1) : '#fbf4e4'
+                    }, svg);
+                });
+
+                let heading = 0;
+                if (nextStop != null) {
+                    const target = stopPoint(nextStop);
+                    const leg = legPath(from, target);
+                    el('path', { d: leg.d, class: 'leg is-ahead' }, svg);
+                    el('circle', { cx: target.x, cy: target.y, r: 6, class: 'next-glow' }, svg);
+                    // Face along the leg's first stretch (towards its bend).
+                    heading = Math.atan2(leg.cx - from.x, -(leg.cy - from.y)) * 180 / Math.PI;
+                    if (target.x === from.x && target.y === from.y) heading = 0;
+                }
+                const plane = el('g', {
+                    transform: `translate(${from.x} ${from.y}) rotate(${heading}) translate(-9 -9) scale(0.75)`
+                }, svg);
+                el('path', { d: PLANE_PATH, class: 'plane' }, plane);
+            }
+
+            function renderPlan(gd) {
+                const route = gd.route || [];
+                const player = activePlayer(gd);
+                const cleared = player ? Math.min(player.stopIdx || 0, route.length) : 0;
+                const done = !!(player && player.finished);
+                const next = done ? null : route[cleared];
+
+                document.getElementById('planName').textContent = throwerName(gd, gd.activeIdx) || '—';
+                const nextEl = document.getElementById('planNextStop');
+                document.getElementById('planNextLabel').textContent = done ? 'Status' : 'Next stop';
+                nextEl.textContent = done ? 'HOME' : stopText(next);
+                nextEl.classList.toggle('is-bull', done || next === 'bull');
+                document.getElementById('planLegs').textContent = done
+                    ? `All ${route.length} stops`
+                    : `Stop ${cleared + 1} of ${route.length}`;
+                const darts = player ? (done ? player.finishDarts : player.darts) || 0 : 0;
+                document.getElementById('planDarts').textContent = `${darts} dart${darts === 1 ? '' : 's'}`;
+
+                const turn = Array.isArray(gd.turnDarts) ? gd.turnDarts : [];
+                for (let i = 0; i < 3; i++) {
+                    const t = document.getElementById(`ticket${i}`);
+                    const d = turn[i];
+                    t.className = 'ticket' + (d ? (d.hit ? ' is-hit' : ' is-miss') : '');
+                    t.textContent = d ? d.label : '';
+                }
+
+                const key = [gd.activeIdx, cleared, done, (gd.route || []).join(',')].join('|');
+                if (key !== lastBoardKey) {
+                    lastBoardKey = key;
+                    buildRouteMap(gd);
+                }
+            }
+
+            /* —— Travellers —— */
+            function renderScoreboard(gd) {
+                const pane = document.getElementById('scorePane');
+                const players = gd.players || [];
+                const route = gd.route || [];
+                const thrown = gd.throwsThisTurn || 0;
+                pane.classList.toggle('is-doubles', !!gd.isDoublesLineup);
+
+                // Same squeeze as Shanghai: rows are sized by the badge, and only a
+                // full six-player lineup overruns the pane's height.
+                if (players.length >= 6) {
+                    pane.style.setProperty('--atw-row-pad-v', '6px');
+                    pane.style.setProperty('--atw-identity-pad-b', '0px');
+                    pane.style.setProperty('--atw-avatar-scale', '0.76');
+                } else {
+                    pane.style.removeProperty('--atw-row-pad-v');
+                    pane.style.removeProperty('--atw-identity-pad-b');
+                    pane.style.removeProperty('--atw-avatar-scale');
+                }
+
+                pane.innerHTML = players.map((p, idx) => {
+                    const isActive = idx === gd.activeIdx;
+                    const rgb = playerRgb(idx);
+                    const members = window.FC_doublesMembersOf ? FC_doublesMembersOf(p, gd) : [p];
+                    const isDuo = !!(gd.isDoublesLineup && members.length > 1);
+                    const throwerIdx = (gd.throwerIndices && gd.throwerIndices[idx] != null) ? gd.throwerIndices[idx] : 0;
+                    const dots = [0, 1, 2].map((d) =>
+                        `<div class="dot ${isActive && d < thrown ? 'thrown' : ''}"></div>`).join('');
+                    let identity;
+                    if (isDuo && window.FC_renderDoublesDuo) {
+                        identity = FC_renderDoublesDuo(members, { isActive, throwerIdx, colorIndex: idx, dartsHtml: dots });
+                    } else {
+                        identity = `${FC_renderPlayerBadge(p.avatar, p.name, { colorIndex: idx, orbit: isActive })}<div class="dart-dots">${dots}</div>`;
+                    }
+
+                    const cleared = Math.min(p.stopIdx || 0, route.length);
+                    const stops = route.map((stop, i) => {
+                        const state = i < cleared ? 'is-cleared' : (i === cleared && !p.finished ? 'is-next' : '');
+                        const bull = stop === 'bull' ? ' is-bull' : '';
+                        // A cleared stop shows the darts it took; its place in the
+                        // row already says which number it was.
+                        const took = Array.isArray(p.stopDarts) ? p.stopDarts[i] : null;
+                        const label = i < cleared && took != null
+                            ? String(took)
+                            : (stop === 'bull' ? 'B' : esc(stop));
+                        return `<div class="stop ${state}${bull}">${label}</div>`;
+                    }).join('');
+                    const stamp = p.finished ? `<div class="route-stamp">Landed</div>` : '';
+                    const darts = p.finished ? p.finishDarts : (p.darts || 0);
+
+                    return `
+                        <div class="team-row color-${idx % 8}${isActive ? ' active-turn' : ''}${p.finished ? ' is-home' : ''}" style="--row-rgb: ${rgb.join(', ')}">
+                            <div class="team-identity${isDuo ? ' is-duo' : ''}">${identity}</div>
+                            <div class="route-strip" style="--stops: ${route.length}">${stops}${stamp}</div>
+                            <div class="tally">
+                                <span class="tally-num">${darts}</span>
+                                <span class="tally-cap">${p.finished ? 'darts · home' : 'darts'}</span>
+                            </div>
+                        </div>`;
+                }).join('');
+            }
+
+            /* —— Takeovers —— */
+            function avatarHtml(avatar, name) {
+                return window.FC_renderAvatarHtml
+                    ? FC_renderAvatarHtml(avatar, name)
+                    : (avatar ? `<img src="${esc(avatar)}" alt="">` : `<div class="initials">${esc((name || '?').slice(0, 2).toUpperCase())}</div>`);
+            }
+
+            function seedFx(withConfetti) {
+                const fx = document.getElementById('atwFx');
+                const colours = ['#d23a3a', '#1f4f9c', '#f4ead5', '#e2a93b'];
+                let html = '';
+                for (let i = 0; i < 7; i++) {
+                    const top = (10 + Math.random() * 70).toFixed(1);
+                    const size = (26 + Math.random() * 22).toFixed(0);
+                    const delay = (Math.random() * 4).toFixed(2);
+                    const dur = (6 + Math.random() * 4).toFixed(2);
+                    const dy = (-10 - Math.random() * 30).toFixed(0);
+                    html += `<span class="atw-paper-plane" style="left:-8%;top:${top}%;--size:${size}px;--delay:${delay}s;--dur:${dur}s;--dy:${dy}vh;--rot:${(Math.random() * 16 - 20).toFixed(0)}deg">`
+                        + `<svg viewBox="0 0 24 24"><path d="M2 12 22 3 15 21 11 14z" fill="#f4ead5" stroke="#1d2b38" stroke-width="0.8" stroke-linejoin="round"/><path d="M22 3 11 14" stroke="#1d2b38" stroke-width="0.8"/></svg></span>`;
+                }
+                if (withConfetti) {
+                    for (let i = 0; i < 36; i++) {
+                        const left = (Math.random() * 100).toFixed(1);
+                        const delay = (Math.random() * 3.2).toFixed(2);
+                        const dur = (3.4 + Math.random() * 3).toFixed(2);
+                        html += `<span class="atw-confetti" style="left:${left}%;top:-5%;--c:${colours[i % colours.length]};--delay:${delay}s;--dur:${dur}s;--w:${(6 + Math.random() * 8).toFixed(1)}px;--h:${(4 + Math.random() * 6).toFixed(1)}px;--drift:${(Math.random() * 120 - 60).toFixed(0)}px"></span>`;
+                    }
+                }
+                fx.innerHTML = html;
+            }
+
+            function hideOverlay() {
+                const o = document.getElementById('atwOverlay');
+                o.classList.remove('active', 'mode-next', 'mode-landed', 'mode-winner', 'mode-draw');
+                document.getElementById('atwFx').innerHTML = '';
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.stopIn(o);
+            }
+
+            function setAvatars(people) {
+                const ring = document.getElementById('atwAvatarRing');
+                const host = document.getElementById('atwAvatarHost');
+                if (people.length > 1) {
+                    ring.classList.add('is-group');
+                    host.style.display = 'flex';
+                    host.style.gap = '18px';
+                    host.innerHTML = people.map((m) =>
+                        `<div class="atw-group-col"><div class="atw-avatar">${avatarHtml(m.avatar, m.name)}</div>${m.label ? `<div class="atw-group-name">${esc(m.label)}</div>` : ''}</div>`
+                    ).join('');
+                } else {
+                    ring.classList.remove('is-group');
+                    host.style.display = '';
+                    const m = people[0] || {};
+                    host.innerHTML = `<div class="atw-avatar">${avatarHtml(m.avatar, m.name)}</div>`;
+                }
+            }
+
+            function showOverlay(mode, cfg) {
+                const o = document.getElementById('atwOverlay');
+                o.classList.add('active', `mode-${mode}`);
+                if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.applyScreenClass(o);
+
+                document.getElementById('atwEyebrow').textContent = cfg.eyebrow || '';
+                const banner = document.getElementById('atwBanner');
+                banner.textContent = cfg.banner || '';
+                banner.classList.toggle('visible', !!cfg.banner);
+                setAvatars(cfg.people || []);
+                document.getElementById('atwName').textContent = cfg.name || '';
+                document.getElementById('atwQuip').textContent = cfg.quip || '';
+                document.getElementById('atwStubLabel').textContent = cfg.stubLabel || '';
+                const big = document.getElementById('atwStubBig');
+                big.textContent = cfg.stubBig != null ? String(cfg.stubBig) : '';
+                big.classList.toggle('is-word', String(cfg.stubBig || '').length > 3);
+                document.getElementById('atwStubSub').textContent = cfg.stubSub || '';
+                document.getElementById('atwStamp').firstChild.textContent = cfg.stamp || 'Landed';
+                document.getElementById('atwStampSub').textContent = cfg.stampSub || '';
+
+                const list = document.getElementById('atwStandings');
+                const rows = Array.isArray(cfg.standings) ? cfg.standings : [];
+                list.classList.toggle('visible', rows.length > 1);
+                list.innerHTML = rows.length > 1 ? rows.slice(0, 6).map((s) => {
+                    const result = s.finished
+                        ? `${s.darts} darts`
+                        : `${s.stopsCleared}/${s.stopsTotal} stops · ${s.darts} darts`;
+                    return `<li class="${s.place === 1 ? 'is-top' : ''}"><span class="pl">${s.place}.</span><span class="nm">${esc(s.name)}</span><span class="rs">${result}</span></li>`;
+                }).join('') : '';
+
+                if (mode === 'winner') {
+                    seedFx(true);
+                    if (window.FlightDeckWinnerVideo) FlightDeckWinnerVideo.playIn(o);
+                } else if (mode === 'landed' || mode === 'draw') {
+                    seedFx(false);
+                }
+            }
+
+            function peopleOf(d) {
+                if (Array.isArray(d.members) && d.members.length > 1) return d.members;
+                return [{ avatar: d.avatar, name: d.playerName || d.winnerName || d.nextPlayerName }];
+            }
+
+            function renderPhaseOverlays(gd) {
+                document.getElementById('helpOverlayCard').classList.toggle('visible', !!gd.helpVisible);
+                const phase = gd.phase || { type: 'playing' };
+                const key = `${phase.type}-${phase.startedAt}`;
+                if (key === lastPhaseKey) return;
+                lastPhaseKey = key;
+                hideOverlay();
+                const d = phase.data || {};
+                const total = (gd.route || []).length;
+
+                if (phase.type === 'intermission') {
+                    showOverlay('next', {
+                        eyebrow: 'Now boarding',
+                        banner: d.lastCall ? (d.beatDarts ? `Last call · ${d.beatDarts} darts to beat` : 'Last call') : '',
+                        people: [{ avatar: d.avatar, name: d.nextPlayerName }],
+                        name: d.nextPlayerName || 'PLAYER',
+                        quip: d.stopIndex > 0 ? `${d.stopIndex} of ${d.stopsTotal || total} stops cleared` : 'Wheels up — first stop, 1',
+                        stubLabel: 'Next stop',
+                        stubBig: d.stopLabel || stopText(d.targetNumber),
+                        stubSub: `${d.darts || 0} darts so far`
+                    });
+                    return;
+                }
+                if (phase.type === 'landed') {
+                    const quip = d.solo ? `Around the world in ${d.darts} darts`
+                        : d.firstHome ? 'First one home!'
+                        : d.leading ? 'New leader!' : 'Home and dry';
+                    showOverlay('landed', {
+                        eyebrow: 'Arrivals',
+                        banner: !d.solo && d.stillToThrow > 0
+                            ? `Last call for ${d.stillToThrow} more` : '',
+                        people: peopleOf(d),
+                        name: d.teamName || d.playerName || 'PLAYER',
+                        quip,
+                        stubLabel: 'Darts',
+                        stubBig: d.darts,
+                        stubSub: `All ${total} stops`,
+                        stamp: 'Landed',
+                        stampSub: `${d.darts} darts`
+                    });
+                    return;
+                }
+                if (phase.type === 'winner') {
+                    showOverlay('winner', {
+                        eyebrow: d.solo ? 'Round the world' : 'World traveller',
+                        people: peopleOf(d),
+                        name: d.winnerName || 'PLAYER',
+                        quip: d.finished === false
+                            ? 'Furthest round the world'
+                            : `Around the world in ${d.darts} darts`,
+                        stubLabel: 'Darts',
+                        stubBig: d.darts,
+                        stubSub: d.solo ? `${d.rounds} visits` : `${d.stopsTotal || total} stops`,
+                        stamp: 'Winner',
+                        stampSub: `${d.darts} darts`,
+                        standings: d.standings
+                    });
+                    return;
+                }
+                if (phase.type === 'draw') {
+                    const contenders = d.contenders || [];
+                    showOverlay('draw', {
+                        eyebrow: 'Dead heat',
+                        people: contenders.map((c) => ({ avatar: c.avatar, name: c.name, label: c.name })),
+                        name: '',
+                        quip: `Home together in ${d.darts} darts`,
+                        stubLabel: 'Darts',
+                        stubBig: d.darts,
+                        stubSub: 'Tied',
+                        stamp: 'Tied',
+                        stampSub: `${d.darts} darts`,
+                        standings: d.standings
+                    });
+                }
+            }
+
+            function boardDate(iso) {
+                const d = new Date(iso);
+                if (Number.isNaN(d.getTime())) return '';
+                const mon = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][d.getMonth()];
+                return `${String(d.getDate()).padStart(2, '0')} ${mon} ${String(d.getFullYear()).slice(2)}`;
+            }
+
+            /** Shown from Control's Leaderboard button (gameData.leaderboardVisible). */
+            function renderLeaderboard(state) {
+                const gd = state.gameData || {};
+                const board = document.getElementById('atwBoard');
+                board.classList.toggle('visible', !!gd.leaderboardVisible);
+                board.setAttribute('aria-hidden', gd.leaderboardVisible ? 'false' : 'true');
+                const rows = (state.leaderboard && state.leaderboard.rows) || [];
+                const list = document.getElementById('atwBoardList');
+                if (!rows.length) {
+                    list.innerHTML = '<div class="atw-board-empty">No flights yet — first one round sets the record</div>';
+                    return;
+                }
+                list.innerHTML = rows.map((m, i) => {
+                    const integ = m.integrity || {};
+                    const flag = integ.clean === false
+                        ? `<span class="flag">${integ.usedCorrection ? 'CORRECTED' : 'DEBUG'}</span>` : '';
+                    return `<div class="atw-board-row${i === 0 ? ' is-top' : ''}">`
+                        + `<span class="rk">${i + 1}</span>`
+                        + `<span class="nm">${esc((m.player && m.player.name) || 'PLAYER')}${flag}</span>`
+                        + `<span class="sc">${esc(m.totalScore)}</span>`
+                        + `<span class="dt">${esc(boardDate(m.playedAt))}</span></div>`;
+                }).join('');
+            }
+
+            function applyGameData(gd) {
+                if (!gd || gd.gameType !== 'aroundtheworld') return;
+                renderScoreboard(gd);
+                renderPlan(gd);
+                renderPhaseOverlays(gd);
+            }
+
+            window.addEventListener('message', (event) => {
+                const msg = event.data;
+                if (!msg || msg.type !== 'SYNC_STATE' || !msg.state) return;
+                const state = msg.state;
+                if (window.FlightDeckWinnerVideo) {
+                    FlightDeckWinnerVideo.applyFromState(state);
+                    FlightDeckWinnerVideo.applyScreenClass(document.getElementById('atwOverlay'));
+                }
+                applyGameData(state.gameData);
+                if (state.gameData && state.gameData.gameType === 'aroundtheworld') renderLeaderboard(state);
+            });
+
+            if (window.FC_syncWindowTitleBackground) FC_syncWindowTitleBackground();
+            buildRouteMap({ route: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 'bull'], players: [], activeIdx: 0 });
+        });
+    </script>
+</body>
+</html>

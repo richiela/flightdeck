@@ -34,6 +34,7 @@ const ENGINE_FILES = [
     { name: 'x01', path: './x01' },
     { name: 'warmup', path: './warmup' },
     { name: 'quick10', path: './quick10' },
+    { name: 'aroundtheworld', path: './aroundtheworld' },
 ];
 
 function loadOptional(path, name) {

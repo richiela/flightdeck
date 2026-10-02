@@ -52,14 +52,23 @@ function readAllMatches(dataDir) {
 }
 
 /**
- * Top scores for a game type. Higher totalScore first; earlier playedAt wins ties.
+ * Top scores for a game type. Higher totalScore first (order 'desc', the
+ * default) or lower first (order 'asc', e.g. fewest darts); earlier playedAt
+ * wins ties.
+ *
+ * A record carrying the same id as an earlier one replaces it: a result that
+ * is re-saved after a score correction counts once, as corrected.
  */
-function topMatches(dataDir, gameType, limit = 5) {
+function topMatches(dataDir, gameType, limit = 5, order = 'desc') {
     const cap = Math.max(1, Number(limit) || 5);
-    return readAllMatches(dataDir)
+    const sign = order === 'asc' ? 1 : -1;
+    const latest = new Map();
+    readAllMatches(dataDir)
         .filter((m) => m && m.gameType === gameType && Number.isFinite(Number(m.totalScore)))
+        .forEach((m, i) => latest.set(m.id != null ? `id:${m.id}` : `row:${i}`, m));
+    return [...latest.values()]
         .sort((a, b) => {
-            const scoreDiff = Number(b.totalScore) - Number(a.totalScore);
+            const scoreDiff = sign * (Number(a.totalScore) - Number(b.totalScore));
             if (scoreDiff !== 0) return scoreDiff;
             const at = Date.parse(a.playedAt) || 0;
             const bt = Date.parse(b.playedAt) || 0;

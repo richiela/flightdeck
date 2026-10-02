@@ -1,12 +1,12 @@
 {
   "name": "flightdeck",
-  "version": "0.21.3",
+  "version": "0.23.0",
   "description": "A control panel + kiosk display for running a real dartboard as a party/venue game system.",
   "main": "src/server.js",
   "scripts": {
     "start": "nodemon src/server.js",
     "dev": "SCORING_MODE=mock PORT=4000 nodemon src/server.js",
-    "test": "node tests/engine-golden.js && node tests/derby-finish.js",
+    "test": "node tests/engine-golden.js && node tests/derby-finish.js && node tests/aroundtheworld.js && node tests/leaderboards.js",
     "test:update": "node tests/engine-golden.js --update"
   },
   "keywords": [],
@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "tp-link-tapo-connect": "^2.0.15",
     "uuid": "^14.0.1",
     "ws": "^8.21.0"
   },

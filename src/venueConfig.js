@@ -12,6 +12,7 @@ const ALL_GAMES = [
     'quick10',
     'x01',
     'cricket',
+    'aroundtheworld',
 ];
 
 const DART_CALLOUT_MODES = ['card', 'sound', 'both', 'off'];

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Richie's Flight Deck</title>
+    <style>
+        /* The front door: what someone gets at https://<host>:4000/ -- the two
+           screens FlightDeck serves, instead of a 404. Same palette and type
+           as Control. */
+        :root {
+            --bg-dark: #121214;
+            --panel-bg: rgba(20, 20, 24, 0.86);
+            --gold: #c5a059;
+            --gold-glow: #f5e3b5;
+            --crimson: #9e1b1b;
+            --text: #f0eedf;
+        }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Georgia', serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100dvh;
+        }
+        .backdrop {
+            position: fixed;
+            inset: 0;
+            background: url('/assets/app/viewer_registration.png') center / cover no-repeat;
+            filter: brightness(0.4);
+            z-index: 0;
+        }
+        header {
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+            background-color: #09090a;
+            padding: 15px 30px;
+            padding-top: calc(15px + env(safe-area-inset-top, 0px));
+            display: flex;
+            justify-content: center;
+            border-bottom: 3px solid var(--gold);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+        .arena {
+            font-size: 1.4rem;
+            letter-spacing: 3px;
+            color: var(--gold-glow);
+            text-transform: uppercase;
+            font-weight: bold;
+            text-align: center;
+        }
+        main {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+            padding: 32px 20px calc(32px + env(safe-area-inset-bottom, 0px));
+        }
+        .prompt {
+            margin: 0;
+            font-size: 0.95rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold-glow);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+        }
+        .choices {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 340px));
+            gap: 24px;
+            width: 100%;
+            justify-content: center;
+        }
+        .choice {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 30px 26px 26px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text);
+            background: var(--panel-bg);
+            border: 2px solid rgba(197, 160, 89, 0.55);
+            border-radius: 10px;
+            box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+            transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .choice:hover,
+        .choice:focus-visible {
+            border-color: var(--gold);
+            transform: translateY(-3px);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.6), 0 0 18px rgba(197, 160, 89, 0.25);
+            outline: none;
+        }
+        .choice:active { transform: translateY(0); }
+        .choice svg { width: 64px; height: 64px; color: var(--gold); }
+        .choice h2 {
+            margin: 0;
+            font-size: 1.6rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold-glow);
+        }
+        .choice p {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.45;
+            color: rgba(240, 238, 223, 0.82);
+        }
+        .choice .path {
+            margin-top: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            color: rgba(245, 227, 181, 0.55);
+        }
+        .version {
+            position: fixed;
+            z-index: 1;
+            left: 16px;
+            bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            font-family: sans-serif;
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: rgba(240, 238, 223, 0.45);
+        }
+        @media (max-width: 640px) {
+            .choices { grid-template-columns: minmax(0, 420px); }
+            .choice { padding: 22px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="backdrop" aria-hidden="true"></div>
+    <header><div class="arena" id="arenaName">Richie's Flight Deck</div></header>
+    <main>
+        <p class="prompt">Which screen is this?</p>
+        <div class="choices">
+            <a class="choice" href="/control.html">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="10" y="6" width="44" height="52" rx="6"/>
+                    <circle cx="32" cy="22" r="7"/>
+                    <path d="M20 40c2-6 7-9 12-9s10 3 12 9"/>
+                    <path d="M22 50h20"/>
+                </svg>
+                <h2>Control</h2>
+                <p>Run the night: register players, set the lineup, pick the game.</p>
+                <span class="path">/control</span>
+            </a>
+            <a class="choice" href="/viewer.html">
+                <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="4" y="10" width="56" height="36" rx="4"/>
+                    <circle cx="32" cy="28" r="10"/>
+                    <circle cx="32" cy="28" r="4"/>
+                    <path d="M24 56h16M32 46v10"/>
+                </svg>
+                <h2>Viewer</h2>
+                <p>The big screen everyone watches while they play.</p>
+                <span class="path">/viewer</span>
+            </a>
+        </div>
+    </main>
+    <span class="version" id="appVersion"></span>
+    <script>
+        // Name the arena and show the version, as the other screens do. One
+        // state message is all this needs, so the socket closes straight after:
+        // this page is a menu, not a screen the server should keep updating.
+        (function () {
+            try {
+                const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                const socket = new WebSocket(`${proto}://${location.host}`);
+                socket.onmessage = (event) => {
+                    let msg;
+                    try { msg = JSON.parse(event.data); } catch (_) { return; }
+                    if (!msg || msg.type !== 'STATE_UPDATE' || !msg.data) return;
+                    const s = msg.data;
+                    if (s.arenaName) {
+                        document.getElementById('arenaName').textContent = s.arenaName;
+                        document.title = s.arenaName;
+                    }
+                    if (s.appVersion) document.getElementById('appVersion').textContent = String(s.appVersion);
+                    socket.close();
+                };
+                setTimeout(() => { try { socket.close(); } catch (_) {} }, 5000);
+            } catch (_) { /* the menu works without it */ }
+        })();
+    </script>
+</body>
+</html>

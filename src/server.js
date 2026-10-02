@@ -105,12 +105,11 @@ function installLogTee() {
 
 installLogTee();
 
-const { initGameData, handleGameAction, applyScheduledAction, buildDebugPreviewPhase, initialMatchSchedule, buildQuick10MatchRecord, CRICKET_MAX_PLAYERS, X01_MAX_PLAYERS, normalizeThrowProfileId, DEFAULT_THROW_PROFILE, getActiveThrowerEntity, parseBotFromName } = require('./engines');
+const { initGameData, handleGameAction, applyScheduledAction, buildDebugPreviewPhase, initialMatchSchedule, leaderboardSpec, matchRecordsFor, buildQuick10MatchRecord, CRICKET_MAX_PLAYERS, X01_MAX_PLAYERS, normalizeThrowProfileId, DEFAULT_THROW_PROFILE, getActiveThrowerEntity, parseBotFromName } = require('./engines');
 const { mapScoliaThrow, isMockMode } = require('./board/scolia/scoliaClient');
 const { createBoardDriver, loadBoardConfig, saveBoardConfig } = require('./board/createBoardDriver');
 const { appendMatch, topMatches } = require('./matchHistory');
 const { loadVenueConfig, saveVenueConfig, isGameEnabled, firstEnabledGame, ALL_GAMES } = require('./venueConfig');
-const { createTapoLights } = require('./lights/tapoLights');
 
 const app = express();
 const sslOptions = {
@@ -617,8 +616,8 @@ function fourPlayerGameLabel(gameType) {
     return gameType === 'x01' ? 'X01' : 'Cricket';
 }
 
-/** Warmup / Quick 10 / X01 may start with a single competitor; everyone else needs 2+. */
-const SOLO_START_GAMES = new Set(['warmup', 'quick10', 'x01']);
+/** Warmup / Quick 10 / X01 / Around the World may start with a single competitor; everyone else needs 2+. */
+const SOLO_START_GAMES = new Set(['warmup', 'quick10', 'x01', 'aroundtheworld']);
 
 function gameAllowsSoloStart(gameType) {
     return SOLO_START_GAMES.has(gameType);
@@ -1199,7 +1198,6 @@ function syncOpenDartsThrowCorrect(index, payload) {
 
 /** Actions that should not count as venue activity (in-game wake-lock idle). */
 const VENUE_ACTIVITY_SKIP = new Set([
-    'LIGHTS_REFRESH',
     'BOARD_CLEAR_LOG',
     'BOARD_SET_LOG_PAUSED'
 ]);
@@ -1235,7 +1233,58 @@ function getPublicGameState() {
     if (gameState.selectedGame === 'quick10' || (gameState.gameData && gameState.gameData.gameType === 'quick10')) {
         pub.quick10Leaderboard = topMatches(DATA_DIR, 'quick10', 10);
     }
+    {
+        const lbGame = (gameState.gameData && gameState.gameData.gameType) || gameState.selectedGame;
+        const spec = lbGame ? leaderboardSpec(lbGame) : null;
+        if (spec) {
+            pub.leaderboard = {
+                gameType: lbGame,
+                order: spec.order,
+                unit: spec.unit,
+                rows: cachedTopMatches(lbGame, spec)
+            };
+        }
+    }
     return pub;
+}
+
+/**
+ * Leaderboard rows, re-read only after a result is saved. The state goes out
+ * on every dart, and the history file only grows; reading it each time is
+ * wasted work on a Pi.
+ */
+const leaderboardCache = new Map();
+function cachedTopMatches(gameType, spec) {
+    if (!leaderboardCache.has(gameType)) {
+        leaderboardCache.set(gameType, topMatches(DATA_DIR, gameType, spec.limit || 10, spec.order));
+    }
+    return leaderboardCache.get(gameType);
+}
+
+/**
+ * Saves a finished game's leaderboard entries, once. Runs on every broadcast,
+ * so no path that ends a game can miss it; the engine decides what is final
+ * (resultReady) and who earned a place, and resultPersisted stops a repeat.
+ * A score correction restores the game from before the last dart, flag
+ * included, so the corrected result is saved again under the same ids and
+ * replaces the first.
+ */
+function maybePersistMatchResults() {
+    const gd = gameState.gameData;
+    if (!gd || !gd.resultReady || gd.resultPersisted) return;
+    gd.resultPersisted = true;
+    const records = matchRecordsFor(gd);
+    if (!records.length) return;
+    let saved = 0;
+    for (const record of records) {
+        const res = appendMatch(DATA_DIR, record);
+        if (res.ok) saved++;
+        else logDebugEvent('MATCH_PERSIST_FAIL', res.error || 'Failed to append match', { gameType: gd.gameType });
+    }
+    leaderboardCache.delete(gd.gameType);
+    logDebugEvent('MATCH_PERSIST', `Saved ${saved} ${gd.gameType} leaderboard result(s)`, {
+        results: records.map((r) => `${r.player.name}: ${r.totalScore}`)
+    });
 }
 
 /** Apply any pending overlay chain immediately (no delays / no re-animation waits). */
@@ -1419,6 +1468,7 @@ function schedulePhaseAction(schedule) {
 }
 
 function broadcastState() {
+    maybePersistMatchResults();
     const payload = JSON.stringify({ type: 'STATE_UPDATE', data: getPublicGameState() });
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
@@ -1533,35 +1583,19 @@ function broadcastScolia() {
     });
 }
 
-function broadcastLights() {
-    if (!dartLights) return;
-    const data = dartLights.getPublicState();
-    const msg = JSON.stringify({ type: 'LIGHTS_UPDATE', data });
-    wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(msg);
-        }
-    });
-}
-
-let dartLights = createTapoLights({
-    dataDir: DATA_DIR,
-    onUpdate: broadcastLights
-});
-
 function currentBoardProviderId() {
     if (!boardDriver) return null;
     const pub = typeof boardDriver.getPublicState === 'function' ? boardDriver.getPublicState() : {};
     return boardDriver.provider || pub.provider || pub.mode || null;
 }
 
-function isDetectionLightsProvider() {
+function isDetectionBoardProvider() {
     const provider = currentBoardProviderId();
     return provider === 'autodarts' || provider === 'opendarts';
 }
 
 function detectionBoardLooksStopped() {
-    if (!isDetectionLightsProvider()) return false;
+    if (!isDetectionBoardProvider()) return false;
     const pub = boardDriver.getPublicState();
     if (pub.boardStatus === 'Stopped') return true;
 
@@ -1579,10 +1613,8 @@ function detectionBoardLooksStopped() {
     return false;
 }
 
-/** Actions that should not wake local cams / lights. */
+/** Actions that should not wake the board's detection. */
 const BOARD_WAKE_SKIP = new Set([
-    'LIGHTS_OFF',
-    'LIGHTS_REFRESH',
     'BOARD_CLEAR_LOG',
     'BOARD_SET_LOG_PAUSED',
     'TVM_COMPLETE',
@@ -1595,17 +1627,18 @@ const BOARD_WAKE_SKIP = new Set([
 
 let boardWakeInFlight = null;
 
-/** If Autodarts/OpenDarts detection is stopped, Start it and turn dart lights on (Scolia: no-op). */
+/** If Autodarts/OpenDarts detection is stopped, start it (Scolia: no-op). Cabinet
+ *  lights are not FD's: the kiosk owns them, from OD's capture state (2026-09-30). */
 function maybeWakeBoardForUiAction(action) {
     if (!action || BOARD_WAKE_SKIP.has(action)) return null;
-    if (!isDetectionLightsProvider()) return null;
+    if (!isDetectionBoardProvider()) return null;
     if (!detectionBoardLooksStopped()) return null;
     if (boardWakeInFlight) return boardWakeInFlight;
 
     const provider = currentBoardProviderId() || 'board';
     boardWakeInFlight = Promise.resolve()
         .then(async () => {
-            logDebugEvent('BOARD_WAKE', `UI ${action} — ${provider} was stopped; starting detection + lights`);
+            logDebugEvent('BOARD_WAKE', `UI ${action} — ${provider} was stopped; starting detection`);
             const startResult = await Promise.resolve(boardDriver.sendCommand('start'));
             if (startResult && startResult.ok === false) {
                 logDebugEvent('BOARD_WAKE', startResult.error || 'start failed', {
@@ -1613,19 +1646,11 @@ function maybeWakeBoardForUiAction(action) {
                     path: startResult.path
                 });
             }
-            if (dartLights) {
-                const lightResult = await dartLights.turnOn();
-                if (!lightResult || !lightResult.ok) {
-                    logDebugEvent('BOARD_WAKE', (lightResult && lightResult.error) || 'lights on failed');
-                }
-            }
             broadcastScolia();
-            broadcastLights();
         })
         .catch((err) => {
             logDebugEvent('BOARD_WAKE', err.message || 'failed');
             broadcastScolia();
-            broadcastLights();
         })
         .finally(() => {
             boardWakeInFlight = null;
@@ -1634,70 +1659,16 @@ function maybeWakeBoardForUiAction(action) {
     return boardWakeInFlight;
 }
 
-/** Autodarts/OpenDarts: only cut dart lights after Stopped holds (avoids reset/status flaps). */
-const LIGHTS_OFF_AFTER_STOPPED_MS = 3000;
-let lightsOffAfterStopTimer = null;
-
-function clearLightsOffAfterStopTimer(reason) {
-    if (!lightsOffAfterStopTimer) return;
-    clearTimeout(lightsOffAfterStopTimer);
-    lightsOffAfterStopTimer = null;
-    if (reason) {
-        logDebugEvent('LIGHTS', `cancel delayed off — ${reason}`);
-    }
-}
-
 function onAutodartsDetectionStopped(payload) {
-    if (!isDetectionLightsProvider()) return;
+    if (!isDetectionBoardProvider()) return;
     const provider = currentBoardProviderId() || 'board';
-    const statusLabel = (payload && payload.status) || 'Stopped';
-    logDebugEvent(
-        'BOARD_DETECTION_STOPPED',
-        `${provider} stopped (${statusLabel}) — lights off in ${LIGHTS_OFF_AFTER_STOPPED_MS}ms if still stopped`
-    );
-    if (!dartLights) return;
-
-    clearLightsOffAfterStopTimer();
-    lightsOffAfterStopTimer = setTimeout(() => {
-        lightsOffAfterStopTimer = null;
-        if (!isDetectionLightsProvider()) return;
-        // Timer only survives if BOARD_DETECTION_STARTED never arrived. Don't skip
-        // off just because the provider's "looks stopped" heuristic is messy (esp. 3D).
-        logDebugEvent('LIGHTS', `${provider} still stopped after ${LIGHTS_OFF_AFTER_STOPPED_MS}ms — lights off`);
-        Promise.resolve(dartLights.turnOff())
-            .then((result) => {
-                if (!result || !result.ok) {
-                    logDebugEvent('LIGHTS', (result && result.error) || 'off failed after board stop');
-                }
-                broadcastLights();
-            })
-            .catch((err) => {
-                logDebugEvent('LIGHTS', err.message || 'off failed after board stop');
-                broadcastLights();
-            });
-    }, LIGHTS_OFF_AFTER_STOPPED_MS);
+    logDebugEvent('BOARD_DETECTION_STOPPED', `${provider} stopped (${(payload && payload.status) || 'Stopped'})`);
 }
 
 function onAutodartsDetectionStarted(payload) {
-    if (!isDetectionLightsProvider()) return;
+    if (!isDetectionBoardProvider()) return;
     const provider = currentBoardProviderId() || 'board';
-    clearLightsOffAfterStopTimer('detection active again');
-    logDebugEvent(
-        'BOARD_DETECTION_STARTED',
-        `${provider} active (${(payload && payload.status) || 'Ready'}) — lights on`
-    );
-    if (!dartLights) return;
-    Promise.resolve(dartLights.turnOn())
-        .then((result) => {
-            if (!result || !result.ok) {
-                logDebugEvent('LIGHTS', (result && result.error) || 'on failed after board start');
-            }
-            broadcastLights();
-        })
-        .catch((err) => {
-            logDebugEvent('LIGHTS', err.message || 'on failed after board start');
-            broadcastLights();
-        });
+    logDebugEvent('BOARD_DETECTION_STARTED', `${provider} active (${(payload && payload.status) || 'Ready'})`);
 }
 
 function setAwaitingTakeout(value) {
@@ -2296,15 +2267,12 @@ wss.on('connection', (ws) => {
     ws.send(JSON.stringify({ type: 'STATE_UPDATE', data: getPublicGameState() }));
     ws.send(JSON.stringify({ type: 'BOARD_UPDATE', data: getEnrichedScoliaState() }));
     ws.send(JSON.stringify({ type: 'SCOLIA_UPDATE', data: getEnrichedScoliaState() }));
-    if (dartLights) {
-        ws.send(JSON.stringify({ type: 'LIGHTS_UPDATE', data: dartLights.getPublicState() }));
-    }
 
     ws.on('message', (message) => {
         try {
             const request = JSON.parse(message);
 
-            // Autodarts camera standby: any meaningful Control action wakes detection + lights
+            // Autodarts camera standby: any meaningful Control action wakes detection
             if (request && request.action) {
                 maybeWakeBoardForUiAction(request.action);
                 if (!VENUE_ACTIVITY_SKIP.has(request.action)) {
@@ -2644,6 +2612,8 @@ wss.on('connection', (ws) => {
                         lineupMode: gameState.lineupMode,
                         doublesTeams: gameState.doublesTeams
                     });
+                    // Names this match's leaderboard entries (see maybePersistMatchResults).
+                    if (gameState.gameData) gameState.gameData.matchKey = uuidv4();
                     cancelPhaseChain();
                     clearThrowQueue('New match');
                     clearThrowUndo();
@@ -2925,33 +2895,6 @@ wss.on('connection', (ws) => {
                     break;
                 }
 
-                case 'LIGHTS_ON':
-                case 'LIGHTS_OFF':
-                case 'LIGHTS_TOGGLE':
-                case 'LIGHTS_REFRESH': {
-                    const op = request.action === 'LIGHTS_ON'
-                        ? dartLights.turnOn()
-                        : request.action === 'LIGHTS_OFF'
-                            ? dartLights.turnOff()
-                            : request.action === 'LIGHTS_TOGGLE'
-                                ? dartLights.toggle()
-                                : dartLights.refresh();
-                    Promise.resolve(op).then((result) => {
-                        if (!result || !result.ok) {
-                            logDebugEvent('LIGHTS', (result && result.error) || 'failed', { action: request.action });
-                        } else {
-                            logDebugEvent(
-                                'LIGHTS',
-                                `${request.action} → ${result.on == null ? 'ok' : (result.on ? 'ON' : 'OFF')}`
-                            );
-                        }
-                        broadcastLights();
-                    }).catch((err) => {
-                        logDebugEvent('LIGHTS', err.message || 'failed', { action: request.action });
-                        broadcastLights();
-                    });
-                    break;
-                }
             }
         } catch (err) {
             console.error("Socket warning:", err);
@@ -2961,7 +2904,6 @@ wss.on('connection', (ws) => {
 
 ensureDataDir();
 boardDriver.start();
-dartLights.start();
 applyBoardStandbyFromVenue();
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -2983,13 +2925,5 @@ server.listen(PORT, '0.0.0.0', () => {
         console.log(`   Board: Scolia missing credentials — add data/scolia.json (serialNumber + accessToken)`);
     } else {
         console.log(`   Board: Scolia connecting as ${scoliaState.serialMasked}…`);
-    }
-    const lights = dartLights.getPublicState();
-    if (!lights.configured) {
-        console.log('   Lights: Tapo unconfigured — add tapo block to data/credentials.json');
-    } else if (!lights.enabled) {
-        console.log('   Lights: Tapo disabled in credentials');
-    } else {
-        console.log(`   Lights: Tapo ${lights.model || 'P110M'} @ ${lights.host} (${lights.connection})`);
     }
 });

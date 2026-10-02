@@ -100,8 +100,8 @@ const { mapOpenDartsThrow } = require('./mapThrow');
  *   - opendarts.{running, status, host, port} — `status` here is the
  *     TRANSLATED boardStatus value, NOT the raw enum (that's
  *     opendarts.phase).
- *   - sendCommand('start'/'stop'/'RESET_PHASE'/'RECALIBRATE') — the dart-
- *     lights wake flow (server.js) calls sendCommand('start') directly.
+ *   - sendCommand('start'/'stop'/'RESET_PHASE'/'RECALIBRATE') — the board
+ *     wake flow (server.js) calls sendCommand('start') directly.
  * opendarts.visitId (renamed from visitNumber — it's a string id, not a
  * number) and opendarts.dartCount are copy-through from the latest
  * /api/live message. opendarts.{calibration, captureLoop, trigger,
@@ -273,7 +273,7 @@ function createOpenDartsDriver({ host, port, onUpdate, onEvent }) {
         }
     }
 
-    /** Mirror Autodarts/OpenDarts: Stopped ↔ active edges drive dart-lights automation. */
+    /** Mirror Autodarts: emit Stopped ↔ active edges (server.js logs them). */
     function emitDetectionStatusEdges(prevBoardStatus, source) {
         const next = state.boardStatus;
         if (prevBoardStatus !== 'Stopped' && next === 'Stopped') {
