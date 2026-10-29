@@ -135,6 +135,10 @@ pull_if_requested() {
     return 0
 }
 
+# Tells the server it has this loop behind it, so POST /api/restart can exit
+# knowing it will be relaunched (and refuse when it would not be).
+export FD_SUPERVISED=1
+
 while true; do
     # Follows whatever branch is checked out, so a rig can run a feature branch
     # by checking it out once.

@@ -6,6 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Richie's Flight Deck - Control Panel</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <style>
         :root {
             --bg-dark: #121214;
@@ -244,8 +247,12 @@
             filter: brightness(0.55) contrast(1.05);
             opacity: 0;
             transition: opacity 0.6s ease-in-out;
-            will-change: opacity;
         }
+        /* No permanent will-change here. It made the background its own layer,
+           so the scrim and the whole workspace above it had to be layers too:
+           three full-screen layers (~30 MB on the tablet), whose tiles its
+           WebView kept dropping and re-rastering at the next touch. The
+           cross-fade promotes the layers for as long as it runs. */
         .control-shared-bg .dynamic-bg-viewport.active-layer { opacity: 1; }
         .control-shared-bg-scrim {
             position: absolute;
@@ -410,8 +417,12 @@
             transition: opacity 0.4s ease-out;
         }
         .screen-flash.on { opacity: 1; transition: none; }
-        .camera-box.is-counting .cam-zoom,
-        .camera-box.is-counting .cam-zoom-info { display: none; }
+        /* Kept out of the page (hidden) except while it flashes: a full-screen
+           element stacked above a lifted card had to be given its own
+           full-screen layer for the whole drag, which the tablet's GPU felt as
+           a stall at every pickup. */
+        /* The zoom stays up while counting: the countdown is now the only time
+           the camera is on, so it's the only time to set it. */
         .cam-zoom-level { cursor: pointer; }
         .cam-zoom-info {
             position: absolute;
@@ -446,6 +457,39 @@
         .camera-box.is-previewing #webcamStream {
             filter: brightness(0.35);
         }
+        /* The camera runs only for a take: Take Photo turns it on, the photo
+           (or Cancel) turns it off. In between, the ring holds a placeholder. */
+        .camera-box:not(.is-live) #webcamStream,
+        .camera-box:not(.is-live) .cam-zoom,
+        .camera-box:not(.is-live) .cam-zoom-info { display: none; }
+        .cam-placeholder {
+            position: absolute;
+            left: 50%;
+            top: var(--guide-cy);
+            width: var(--guide-d);
+            height: var(--guide-d);
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4%;
+            color: rgba(197, 160, 89, 0.45);
+            pointer-events: none;
+        }
+        .cam-placeholder svg { width: 52%; height: auto; }
+        .cam-placeholder span {
+            font-family: 'Georgia', serif;
+            font-variant: small-caps;
+            letter-spacing: 1.5px;
+            font-size: clamp(0.7rem, calc(var(--guide-d) * 0.075), 1rem);
+        }
+        .camera-box.is-live .cam-placeholder,
+        .camera-box.is-previewing .cam-placeholder,
+        .camera-box.is-starting .cam-placeholder span { display: none; }
+        .camera-box.is-starting .cam-placeholder svg { animation: camWaking 1s ease-in-out infinite alternate; }
+        @keyframes camWaking { from { opacity: 0.35; } to { opacity: 1; } }
         /* Circular avatar framing guide — keep in sync with AVATAR_GUIDE in script */
         .avatar-guide-shade {
             position: absolute; inset: 0; z-index: 4; pointer-events: none;
@@ -573,14 +617,13 @@
             -webkit-user-select: none;
             user-select: none;
         }
-        body.is-player-card-dragging {
-            cursor: grabbing !important;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        body.is-player-card-dragging .player-card-draggable {
-            cursor: grabbing;
-        }
+        /* Nothing is restyled page-wide for a drag. This used to set cursor and
+           user-select on <body> -- both inherited -- so lifting and dropping a
+           card changed the computed style of every element, and the tablet
+           repainted every seat. Selection is simply always off in the lineup,
+           and the grab cursor sits on the card being dragged. */
+        #view-REGISTRATION .roster-panel { -webkit-user-select: none; user-select: none; }
+        .player-card.dragging { cursor: grabbing; }
         .card-del { position: absolute; top: 8px; right: 12px; background: none; border: none; color: #777; font-size: 1.4rem; cursor: pointer; z-index: 5; }
         .card-avatar { width: 80%; aspect-ratio: 1 / 1; max-height: 150px; border-radius: 50%; border: 3px solid var(--gold); background: #25252c; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(0,0,0,0.5); flex-shrink: 0; margin-bottom: 10px; opacity: 1; }
         .card-avatar img {
@@ -965,9 +1008,12 @@
             background: rgba(197, 160, 89, 0.08);
         }
         /* Lineup dock reorder — slide cards to provisional slots (no swap highlight) */
+        /* No will-change here: it promoted every card in the lineup to its own
+           layer the moment a drag began, and the tablet rasterized them all in
+           one frame (a visible stall at pickup). A card that actually slides
+           is promoted by its own transition. */
         .doubles-grid.is-reordering .player-card {
             transition: transform 0.18s ease, opacity 0.15s ease;
-            will-change: transform;
         }
         .doubles-grid.is-reordering .player-card.lineup-drag-source {
             opacity: 0.3;
@@ -1138,9 +1184,9 @@
             box-sizing: border-box;
             transform: none;
         }
+        /* No will-change: see .doubles-grid.is-reordering .player-card */
         .waiting-bench-track.is-reordering .player-card {
             transition: transform 0.18s ease, opacity 0.15s ease, width 0.18s ease, padding 0.18s ease, margin 0.18s ease;
-            will-change: transform;
         }
         .waiting-bench .player-card.waiting-drag-source {
             opacity: 0;
@@ -1245,6 +1291,21 @@
             -webkit-overflow-scrolling: touch;
         }
         .games-grid::-webkit-scrollbar { display: none; }
+        /* Edge fades: an edge fades out while there are cards past it, so a
+           card cut off at the side reads as "more this way". A mask, so the
+           cards fade into the photo behind them; drawn by the compositor. The
+           widths are registered so they can transition in and out. */
+        @property --games-fade-left { syntax: '<length>'; inherits: false; initial-value: 0px; }
+        @property --games-fade-right { syntax: '<length>'; inherits: false; initial-value: 0px; }
+        .games-grid {
+            --games-fade-left: 0px;
+            --games-fade-right: 0px;
+            -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--games-fade-left), #000 calc(100% - var(--games-fade-right)), transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0, #000 var(--games-fade-left), #000 calc(100% - var(--games-fade-right)), transparent 100%);
+            transition: --games-fade-left 0.25s ease, --games-fade-right 0.25s ease;
+        }
+        .games-grid.more-left { --games-fade-left: 90px; }
+        .games-grid.more-right { --games-fade-right: 90px; }
         .games-grid.is-dragging {
             cursor: grabbing;
             user-select: none;
@@ -2386,6 +2447,671 @@
         }
         footer.mode-select { justify-content: space-between; }
         .nav-forward { background: linear-gradient(135deg, var(--crimson) 0%, #630e0e 100%); border: 2px solid var(--gold); color: var(--gold-glow); padding: 15px 40px; font-size: 1.1rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
+
+        /* ===== REGISTRATION v2 (2026-10-03) =====================================
+           The front page, redone to fit the screen it is on. It was laid out in
+           fixed pixels for a 1920x1080 desk screen; on the venue tablet (an
+           Android panel the browser shows at roughly 1280x750 CSS px) the
+           camera shrank to a strip, Take Photo sat on top of Register, names
+           were cut off under the photos, and half the page was empty dashed
+           slots. Now: two cards that fill the height -- New Player (name,
+           a camera that takes the space left, Take Photo + Register side by
+           side) and Lineup (count, bulk actions, Singles/Doubles, slots that
+           scale with their cell, the waiting bench underneath) -- sized with
+           clamp() and container units so it holds from ~1024x600 up.
+           The ids and classes the drag-and-drop and camera code use are all
+           unchanged; this block only restyles them. Overrides earlier rules
+           by coming last. */
+        #view-REGISTRATION {
+            padding: clamp(8px, 1.2vh, 16px) clamp(10px, 1.2vw, 22px) 0;
+            gap: 0;
+        }
+        #view-REGISTRATION .setup-layout {
+            display: grid;
+            grid-template-columns: clamp(290px, 34vw, 500px) minmax(0, 1fr);
+            gap: clamp(10px, 1.1vw, 20px);
+        }
+        #view-REGISTRATION .form-panel,
+        #view-REGISTRATION .roster-panel {
+            width: auto;
+            max-width: none;
+            background: rgba(14, 14, 18, 0.84);
+            border: 1px solid rgba(197, 160, 89, 0.5);
+            border-radius: 12px;
+            padding: clamp(10px, 1.5vh, 18px) clamp(12px, 1.1vw, 20px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+            gap: clamp(8px, 1.2vh, 14px);
+            min-height: 0;
+        }
+        #view-REGISTRATION .reg-card-title {
+            margin: 0;
+            font-size: clamp(0.82rem, 0.45vw + 0.45vh, 1.05rem);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--gold-glow);
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        #view-REGISTRATION .form-panel label {
+            font-size: clamp(0.66rem, 0.3vw + 0.3vh, 0.78rem);
+            color: rgba(245, 227, 181, 0.7);
+            margin-bottom: 4px;
+        }
+        #view-REGISTRATION input[type="text"] {
+            padding: clamp(8px, 1.1vh, 12px) 12px;
+            font-size: clamp(0.95rem, 0.4vw + 0.4vh, 1.15rem);
+            border: 1px solid #4a4a50;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.55);
+        }
+        #view-REGISTRATION input[type="text"]:focus { border-color: var(--gold); }
+        /* The camera takes the height the card has left, but never much
+           taller than it is wide: a 4:3 or 16:9 camera can't fill a tall,
+           narrow box without black bands. The card is a size container so
+           the cap can follow its width (cqw). */
+        /* The card hugs its contents, so there is no dead band round the
+           camera: the camera is sized from the card's width (a touch taller
+           than wide, which a 4:3 camera still fills at normal zoom) and
+           capped by what the screen's height leaves it. */
+        #view-REGISTRATION .form-panel { container-type: inline-size; align-self: start; }
+        #view-REGISTRATION .form-group-photo { flex: 0 0 auto; min-height: 0; }
+        #view-REGISTRATION .camera-wrap { gap: 0; flex: 0 0 auto; }
+        #view-REGISTRATION .camera-box {
+            height: min(calc(100cqw * 1.1), calc(100dvh - 300px));
+            max-height: none;
+            min-height: 140px;
+            flex: 0 0 auto;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+        }
+        #view-REGISTRATION .reg-actions {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: clamp(8px, 0.7vw, 12px);
+            flex-shrink: 0;
+        }
+        #view-REGISTRATION .reg-actions button {
+            width: 100%;
+            margin: 0;
+            min-height: clamp(42px, 6vh, 56px);
+            padding: 0 10px;
+            font-size: clamp(0.76rem, 0.35vw + 0.35vh, 0.95rem);
+            letter-spacing: 1.5px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        #view-REGISTRATION .reg-actions .snap-overlay-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--gold);
+            color: var(--gold-glow);
+        }
+        #view-REGISTRATION .reg-actions .action-btn {
+            background: linear-gradient(135deg, #b52222 0%, #7a1414 100%);
+            border: 1px solid var(--gold);
+            color: #fff;
+        }
+
+        /* Lineup card */
+        #view-REGISTRATION .roster-panel {
+            container-type: inline-size;
+            container-name: lineup;
+        }
+        #view-REGISTRATION .roster-panel-header {
+            flex-wrap: wrap;
+            gap: 8px 12px;
+        }
+        #view-REGISTRATION .reg-card-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-right: auto;
+        }
+        #view-REGISTRATION .lineup-count {
+            font-family: sans-serif;
+            font-size: clamp(0.68rem, 0.3vw + 0.3vh, 0.82rem);
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.65);
+            padding: 2px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        #view-REGISTRATION .lineup-count:empty { display: none; }
+        #view-REGISTRATION .lineup-count.is-full { color: var(--gold-glow); border-color: var(--gold); }
+        #view-REGISTRATION .lineup-tools { display: flex; gap: 6px; }
+        #view-REGISTRATION .lineup-tools .lineup-bulk-btn,
+        #view-REGISTRATION .lineup-mode-btn {
+            flex: 0 0 auto;
+            padding: clamp(5px, 0.8vh, 8px) clamp(9px, 0.8vw, 14px);
+            font-size: clamp(0.64rem, 0.25vw + 0.3vh, 0.76rem);
+            letter-spacing: 1px;
+            border-width: 1px;
+            border-radius: 6px;
+        }
+        /* Singles / Doubles as one segmented control */
+        #view-REGISTRATION .lineup-mode-toggle { gap: 0; }
+        #view-REGISTRATION .lineup-mode-btn:first-child { border-radius: 6px 0 0 6px; }
+        #view-REGISTRATION .lineup-mode-btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+
+        /* Slots: singles 6 x 2, doubles 3 x 2 teams; fewer columns when narrow */
+        #view-REGISTRATION .doubles-grid {
+            margin-top: 0;
+            gap: clamp(6px, 0.7vw, 12px);
+            height: auto;
+        }
+        #view-REGISTRATION .roster-panel:not(.lineup-doubles) .doubles-grid {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+        #view-REGISTRATION .roster-panel.lineup-doubles .doubles-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+        @container lineup (max-width: 720px) {
+            #view-REGISTRATION .roster-panel:not(.lineup-doubles) .doubles-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                grid-template-rows: repeat(3, minmax(0, 1fr));
+            }
+            #view-REGISTRATION .roster-panel.lineup-doubles .doubles-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-rows: repeat(3, minmax(0, 1fr));
+            }
+        }
+        /* Each slot sizes its own card: the avatar and name scale with the
+           cell, so nothing is cut off at any size. */
+        #view-REGISTRATION .doubles-slot { container-type: size; }
+        #view-REGISTRATION .doubles-slot .player-card {
+            height: 100%;
+            max-height: 100%;
+            padding: 6cqh 5cqw 5cqh;
+            gap: 5cqh;
+            justify-content: center;
+            border-radius: 10px;
+            background: rgba(30, 30, 36, 0.92);
+            border: 1px solid rgba(197, 160, 89, 0.35);
+        }
+        #view-REGISTRATION .doubles-slot .card-avatar {
+            width: min(80cqw, 62cqh);
+            max-height: none;
+            aspect-ratio: 1 / 1;
+            margin: 0;
+            border-width: 2px;
+        }
+        #view-REGISTRATION .doubles-slot .card-avatar div {
+            font-size: min(30cqw, 24cqh) !important;
+        }
+        #view-REGISTRATION .doubles-slot .player-name-display {
+            font-size: clamp(0.7rem, min(10cqw, 11cqh), 1.25rem);
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        #view-REGISTRATION .doubles-slot .card-del { top: 2px; right: 6px; font-size: clamp(1rem, 9cqw, 1.4rem); }
+        /* Empty slots: a quiet "+" drop target, not a fake card */
+        #view-REGISTRATION .doubles-slot-empty {
+            height: 100%;
+            padding: 0;
+            border: 1.5px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            justify-content: center;
+        }
+        #view-REGISTRATION .doubles-slot-empty::before {
+            content: '+';
+            width: auto;
+            max-height: none;
+            aspect-ratio: auto;
+            border: none;
+            border-radius: 0;
+            background: none;
+            margin: 0;
+            font: 300 min(26cqw, 22cqh) / 1 sans-serif;
+            color: rgba(255, 255, 255, 0.14);
+        }
+        #view-REGISTRATION .doubles-slot-empty::after { display: none; }
+        #view-REGISTRATION .doubles-team-box { padding: clamp(14px, 2vh, 20px) 8px 8px; border-width: 1px; }
+        #view-REGISTRATION .roster-panel.lineup-doubles .doubles-team-slots { gap: 8px; }
+
+        /* Waiting bench, under the slots */
+        #view-REGISTRATION .waiting-bench {
+            --bench-h: clamp(92px, 14.5vh, 160px);
+            height: var(--bench-h);
+            min-height: 0;
+            padding: 6px 10px;
+            gap: 10px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.25);
+        }
+        #view-REGISTRATION .waiting-bench.drag-over { border-color: var(--gold); background: rgba(197, 160, 89, 0.08); }
+        #view-REGISTRATION .waiting-bench-label { font-size: clamp(0.6rem, 0.25vw + 0.3vh, 0.72rem); }
+        /* waitingInsertIndexFromX measures cards by offsetLeft, which is only
+           relative to the track when the track is their offsetParent. It never
+           was, so a drop was read as landing one card early -- a card dropped
+           at the end of the bench went "before the second card" and stayed
+           put. */
+        #view-REGISTRATION .waiting-bench-track { position: relative; }
+        /* Explicit size from the bench height: percentages inside a card whose
+           width only came from aspect-ratio resolved to nothing. */
+        #view-REGISTRATION .waiting-bench .player-card {
+            --card-h: calc(var(--bench-h) - 16px);
+            width: calc(var(--card-h) * 0.8);
+            height: var(--card-h);
+            padding: 6px 6px 4px;
+            gap: 4px;
+            justify-content: center;
+            border-radius: 10px;
+            background: rgba(30, 30, 36, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        #view-REGISTRATION .waiting-bench .card-avatar {
+            width: calc(var(--card-h) * 0.52);
+            height: calc(var(--card-h) * 0.52);
+            max-height: none;
+            margin: 0;
+            border-width: 2px;
+            flex-shrink: 0;
+        }
+        #view-REGISTRATION .waiting-bench .card-avatar div { font-size: calc(var(--card-h) * 0.26) !important; }
+        #view-REGISTRATION .waiting-bench .player-name-display { font-size: clamp(0.62rem, 0.3vw + 0.35vh, 0.8rem); max-width: 100%; }
+
+        /* A slimmer footer on this screen */
+        body.screen-registration footer {
+            padding: clamp(6px, 1vh, 12px) clamp(10px, 1.2vw, 22px);
+            padding-bottom: max(clamp(6px, 1vh, 12px), env(safe-area-inset-bottom));
+            min-height: 0;
+        }
+        body.screen-registration .nav-forward {
+            padding: clamp(10px, 1.4vh, 14px) clamp(22px, 2.4vw, 40px);
+            font-size: clamp(0.9rem, 0.4vw + 0.4vh, 1.1rem);
+            border-radius: 8px;
+        }
+        /* Short screens: a tighter header */
+        @media (max-height: 820px) {
+            header { padding-top: calc(8px + env(safe-area-inset-top, 0px)); padding-bottom: 8px; }
+            .header-title-btn { font-size: 1.15rem; }
+        }
+        /* Narrow screens (phones): the cards stack and the page scrolls */
+        @media (max-width: 760px) {
+            #view-REGISTRATION { overflow-y: auto; }
+            #view-REGISTRATION .setup-layout { grid-template-columns: 1fr; }
+            #view-REGISTRATION .camera-box { min-height: 46vh; }
+            #view-REGISTRATION .roster-panel { min-height: 70vh; }
+        }
+        /* ===== end REGISTRATION v2 ===== */
+        /* ----- REGISTRATION v2: finish -----------------------------------------
+           The look, from the room itself: dark wood, brass, crimson, the
+           gold-lettered sign. Panels are brass-trimmed boards; seated players
+           are portrait plaques with an engraved brass nameplate (the plates
+           under the trophies); empty seats are recessed wells; the lineup
+           count is six seat lights. */
+        #view-REGISTRATION {
+            --brass: #c9a35a;
+            --brass-hi: #ecd29a;
+            --brass-lo: #9c7a36;
+            --wood: #15110d;
+            --wood-2: #1d1712;
+            --ink: #2a1d0a;
+        }
+        #view-REGISTRATION .form-panel,
+        #view-REGISTRATION .roster-panel {
+            background:
+                linear-gradient(180deg, rgba(255, 236, 196, 0.035), rgba(255, 236, 196, 0) 120px),
+                linear-gradient(180deg, rgba(29, 23, 18, 0.95), rgba(14, 11, 9, 0.96));
+            border: 1px solid rgba(201, 163, 90, 0.42);
+            border-radius: 14px;
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 236, 196, 0.04),
+                0 18px 40px rgba(0, 0, 0, 0.55);
+        }
+        /* Headings: serif small caps trailing a hairline rule */
+        #view-REGISTRATION .reg-card-title {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-variant: small-caps;
+            text-transform: none;
+            font-weight: normal;
+            font-size: clamp(1.05rem, 0.6vw + 0.6vh, 1.4rem);
+            letter-spacing: 2px;
+            color: var(--brass-hi);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #view-REGISTRATION .form-panel > .reg-card-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(201, 163, 90, 0.6), rgba(201, 163, 90, 0));
+        }
+        #view-REGISTRATION .form-panel label {
+            font-family: Georgia, serif;
+            font-variant: small-caps;
+            text-transform: none;
+            letter-spacing: 1.5px;
+            font-size: clamp(0.78rem, 0.3vw + 0.35vh, 0.92rem);
+            color: rgba(236, 210, 154, 0.62);
+        }
+        #view-REGISTRATION .form-group-photo > label { display: none; }   /* the camera says it */
+        #view-REGISTRATION input[type="text"] {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(201, 163, 90, 0.28);
+            border-radius: 10px;
+            color: #f4ead5;
+            font-family: Georgia, serif;
+        }
+        #view-REGISTRATION input[type="text"]::placeholder { color: rgba(244, 234, 213, 0.32); font-style: italic; }
+        #view-REGISTRATION input[type="text"]:focus {
+            border-color: var(--brass);
+            box-shadow: 0 0 0 3px rgba(201, 163, 90, 0.15);
+        }
+        #view-REGISTRATION .camera-box {
+            border: 1px solid rgba(201, 163, 90, 0.35);
+            border-radius: 12px;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.45);
+            background: #070605;
+        }
+
+        /* One button language: brass outline for secondary, crimson for primary */
+        #view-REGISTRATION .reg-actions button,
+        #view-REGISTRATION .lineup-tools .lineup-bulk-btn,
+        #view-REGISTRATION .lineup-mode-btn,
+        body.screen-registration .nav-forward {
+            font-family: Georgia, serif;
+            font-variant: small-caps;
+            text-transform: none;
+            font-weight: normal;
+            letter-spacing: 1.5px;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        #view-REGISTRATION .reg-actions button { font-size: clamp(0.98rem, 0.45vw + 0.45vh, 1.2rem); }
+        #view-REGISTRATION .reg-actions .snap-overlay-btn {
+            background: transparent;
+            border: 1px solid rgba(201, 163, 90, 0.7);
+            color: var(--brass-hi);
+        }
+        #view-REGISTRATION .reg-actions .snap-overlay-btn:active { background: rgba(201, 163, 90, 0.12); }
+        #view-REGISTRATION .reg-actions .action-btn,
+        body.screen-registration .nav-forward {
+            background: linear-gradient(180deg, #a52a24 0%, #7d1712 100%);
+            border: 1px solid var(--brass);
+            color: #fbefd6;
+            box-shadow: inset 0 1px 0 rgba(255, 220, 190, 0.25), 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+        #view-REGISTRATION .reg-actions .action-btn:active,
+        body.screen-registration .nav-forward:active { background: linear-gradient(180deg, #8f2019 0%, #6a130f 100%); }
+        body.screen-registration .nav-forward { font-size: clamp(1.05rem, 0.5vw + 0.5vh, 1.3rem); }
+        #view-REGISTRATION .lineup-tools .lineup-bulk-btn {
+            background: transparent;
+            border: 1px solid rgba(201, 163, 90, 0.38);
+            color: rgba(236, 210, 154, 0.9);
+            font-size: clamp(0.8rem, 0.3vw + 0.35vh, 0.95rem);
+        }
+        #view-REGISTRATION .lineup-tools .lineup-bulk-btn.danger {
+            border-color: rgba(214, 120, 110, 0.4);
+            color: #e7a59c;
+        }
+        #view-REGISTRATION .lineup-mode-btn {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(201, 163, 90, 0.38);
+            color: rgba(236, 210, 154, 0.55);
+            font-size: clamp(0.8rem, 0.3vw + 0.35vh, 0.95rem);
+        }
+        #view-REGISTRATION .lineup-mode-btn.active {
+            background: linear-gradient(180deg, var(--brass-hi), var(--brass));
+            border-color: var(--brass);
+            color: var(--ink);
+        }
+
+        /* The count as six seat lights (renderLineupCount) */
+        #view-REGISTRATION .lineup-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0;
+            border: none;
+            font-family: Georgia, serif;
+            color: rgba(236, 210, 154, 0.6);
+            font-size: clamp(0.78rem, 0.3vw + 0.35vh, 0.92rem);
+            letter-spacing: 1px;
+        }
+        #view-REGISTRATION .seat-pip {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            border: 1px solid rgba(201, 163, 90, 0.55);
+            background: transparent;
+        }
+        #view-REGISTRATION .seat-pip.on {
+            background: radial-gradient(circle at 35% 35%, #fff3cf, var(--brass) 70%);
+            border-color: var(--brass-hi);
+            box-shadow: 0 0 6px rgba(236, 210, 154, 0.7);
+        }
+
+        /* Seated players: portrait plaques */
+        #view-REGISTRATION .doubles-slot .player-card,
+        #view-REGISTRATION .waiting-bench .player-card {
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(255, 236, 196, 0.07), transparent 70%),
+                linear-gradient(180deg, #221b15, #120e0b);
+            border: 1px solid rgba(201, 163, 90, 0.4);
+            box-shadow: inset 0 1px 0 rgba(255, 236, 196, 0.06), 0 8px 18px rgba(0, 0, 0, 0.45);
+        }
+        #view-REGISTRATION .doubles-slot .card-avatar,
+        #view-REGISTRATION .waiting-bench .card-avatar {
+            border: 2px solid var(--brass);
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.55), 0 0 0 4px rgba(201, 163, 90, 0.35), 0 8px 16px rgba(0, 0, 0, 0.55);
+            background: #1a1511;
+        }
+        #view-REGISTRATION .doubles-slot .card-avatar div,
+        #view-REGISTRATION .waiting-bench .card-avatar div {
+            color: var(--brass-hi) !important;
+            font-family: Georgia, serif !important;
+        }
+        /* The engraved brass nameplate */
+        #view-REGISTRATION .doubles-slot .player-name-display,
+        #view-REGISTRATION .waiting-bench .player-name-display {
+            width: auto;
+            max-width: 92%;
+            padding: 0.18em 0.75em 0.22em;
+            border-radius: 4px;
+            background: linear-gradient(180deg, var(--brass-hi) 0%, var(--brass) 55%, var(--brass-lo) 100%);
+            color: var(--ink);
+            font-family: Georgia, serif;
+            font-variant: small-caps;
+            text-transform: none;
+            letter-spacing: 1px;
+            text-shadow: 0 1px 0 rgba(255, 245, 220, 0.45);
+            box-shadow: inset 0 0 0 1px rgba(80, 55, 15, 0.45), 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #view-REGISTRATION .doubles-slot .card-del,
+        #view-REGISTRATION .waiting-bench .card-del { color: rgba(236, 210, 154, 0.45); }
+
+        /* Empty seats: recessed wells */
+        #view-REGISTRATION .doubles-slot-empty {
+            border: none;
+            background: radial-gradient(ellipse at 50% 40%, rgba(255, 236, 196, 0.03), rgba(0, 0, 0, 0.32) 75%);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(201, 163, 90, 0.08);
+        }
+        #view-REGISTRATION .doubles-slot-empty::before { color: rgba(201, 163, 90, 0.22); }
+        #view-REGISTRATION .doubles-slot.drag-over .doubles-slot-empty,
+        #view-REGISTRATION .doubles-grid.is-reordering .doubles-slot.lineup-insert-target .doubles-slot-empty {
+            box-shadow: inset 0 0 0 2px rgba(236, 210, 154, 0.55), inset 0 2px 10px rgba(0, 0, 0, 0.4);
+        }
+        #view-REGISTRATION .doubles-team-box {
+            border-color: rgba(201, 163, 90, 0.4);
+            background: rgba(0, 0, 0, 0.18);
+        }
+
+        /* The seats and the bench each get their own layer. A card moving
+           otherwise invalidated the whole workspace layer around it -- panels,
+           shadows, wells -- and the tablet re-rastered all of it, twice, on
+           every drop (~110-160 ms each). Now only the grid or bench repaints. */
+        #view-REGISTRATION #doublesGrid,
+        #view-REGISTRATION .waiting-bench-track { will-change: transform; }
+        /* And inside the grid, each seat's contents -- the recessed well of an
+           empty seat, or the plaque of a seated player -- is its own small
+           layer, drawn once. The tablet re-rasters whole tiles, and a tile of
+           the grid spans several seats, so a drop that changed two seats still
+           redrew the blurred wells of most of the others. Permanent, not
+           toggled at drag time (toggling them all at once was the old pickup
+           stall); ~10 MB for twelve seats. */
+        #view-REGISTRATION .doubles-slot > .doubles-slot-empty,
+        #view-REGISTRATION .doubles-slot > .player-card { will-change: transform; }
+        /* Singles: the well stays in the seat, and a seated card covers it. */
+        #view-REGISTRATION .doubles-slot { position: relative; }
+        #view-REGISTRATION .doubles-slot > .doubles-slot-empty + .player-card {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* The waiting bench: a quieter recess under the seats */
+        #view-REGISTRATION .waiting-bench {
+            border: none;
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(201, 163, 90, 0.1);
+        }
+        #view-REGISTRATION .waiting-bench-label {
+            font-family: Georgia, serif;
+            font-variant: small-caps;
+            text-transform: none;
+            letter-spacing: 2px;
+            font-weight: normal;
+            color: rgba(236, 210, 154, 0.6);
+        }
+        #view-REGISTRATION .waiting-bench-empty {
+            font-family: Georgia, serif;
+            font-style: italic;
+            text-transform: none;
+            letter-spacing: 0.5px;
+            color: rgba(236, 210, 154, 0.35);
+        }
+        /* ===== end REGISTRATION v2 finish ===== */
+        /* ----- Drag feel (2026-10-03) -------------------------------------------
+           The lifted card: a wrapper that follows the finger by transform
+           (no transition, so it never lags) around a card that lifts and
+           settles (transition). It lives on <body>, outside the lineup, so it
+           carries its own copy of the plaque look; it is a size container so
+           the card inside scales like it does in its slot. */
+        .drag-lift {
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 10000;
+            pointer-events: none;
+            will-change: transform;
+            container-type: size;
+            --brass: #c9a35a;
+            --brass-hi: #ecd29a;
+            --brass-lo: #9c7a36;
+            --ink: #2a1d0a;
+        }
+        /* Touch: the lift is built during the hold, all but invisible, so its
+           layers are rastered (and the GPU's shaders ready) before the card
+           lifts, instead of all at once in the lift frame. */
+        .drag-lift.is-preparing { opacity: 0.02; }
+        .drag-lift > .player-card-drag-ghost { will-change: transform; }
+        .drag-lift > .player-card-drag-ghost::after { will-change: opacity; }
+        .drag-lift.is-preparing > .player-card-drag-ghost::after { opacity: 0.02; }
+        .drag-lift.is-settling {
+            transition: transform 0.21s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.21s ease, height 0.21s ease;
+        }
+        .drag-lift > .player-card.player-card-drag-ghost {
+            position: static;
+            width: 100%;
+            height: 100%;
+            max-height: none;
+            margin: 0;
+            opacity: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5cqh;
+            padding: 6cqh 5cqw 5cqh;
+            box-sizing: border-box;
+            border-radius: 10px;
+            background:
+                radial-gradient(ellipse at 50% 30%, rgba(255, 236, 196, 0.09), transparent 70%),
+                linear-gradient(180deg, #2a2119, #15110d);
+            border: 1px solid rgba(201, 163, 90, 0.55);
+            transform: scale(1);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+            transition: transform 0.17s cubic-bezier(0.2, 0.9, 0.3, 1.35), opacity 0.14s ease;
+        }
+        /* The lifted shadow and glow are drawn once, on their own layer, and
+           faded in: animating the box-shadow itself re-blurred it every frame,
+           which the tablet felt at every pickup. */
+        .drag-lift > .player-card-drag-ghost::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            border-radius: inherit;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.62), 0 0 0 2px rgba(236, 210, 154, 0.6), 0 0 26px rgba(236, 210, 154, 0.18);
+            opacity: 0;
+            transition: opacity 0.17s ease;
+            pointer-events: none;
+        }
+        .drag-lift.is-lifted > .player-card-drag-ghost {
+            transform: scale(1.08) rotate(-1.2deg);
+        }
+        .drag-lift.is-lifted > .player-card-drag-ghost::after { opacity: 1; }
+        .drag-lift.is-fading > .player-card-drag-ghost { opacity: 0; }
+        .drag-lift .card-avatar {
+            width: min(80cqw, 62cqh);
+            max-height: none;
+            aspect-ratio: 1 / 1;
+            margin: 0;
+            flex-shrink: 0;
+            border: 2px solid var(--brass);
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.55), 0 0 0 4px rgba(201, 163, 90, 0.35);
+            background: #1a1511;
+        }
+        .drag-lift.from-bench .card-avatar { width: 52cqh; }
+        .drag-lift .card-avatar div {
+            font-size: min(30cqw, 24cqh) !important;
+            color: var(--brass-hi) !important;
+            font-family: Georgia, serif !important;
+        }
+        .drag-lift .player-name-display {
+            width: auto;
+            max-width: 92%;
+            padding: 0.18em 0.75em 0.22em;
+            border-radius: 4px;
+            background: linear-gradient(180deg, var(--brass-hi) 0%, var(--brass) 55%, var(--brass-lo) 100%);
+            color: var(--ink);
+            font-family: Georgia, serif;
+            font-variant: small-caps;
+            text-transform: none;
+            letter-spacing: 1px;
+            font-size: clamp(0.62rem, min(10cqw, 11cqh), 1.25rem);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* The spot a lifted card came from stays as a soft impression */
+        /* (No grayscale filter: a filter layer over a photo, raster-heavy on the tablet.) */
+        #view-REGISTRATION .doubles-grid.is-reordering .player-card.lineup-drag-source { opacity: 0.25; }
+        /* Neighbours make way with a slight spring */
+        #view-REGISTRATION .doubles-grid.is-reordering .player-card,
+        #view-REGISTRATION .waiting-bench-track.is-reordering .player-card {
+            transition: transform 0.26s cubic-bezier(0.2, 0.9, 0.25, 1.12), opacity 0.15s ease, width 0.22s ease, padding 0.22s ease, margin 0.22s ease;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .drag-lift.is-settling,
+            .drag-lift > .player-card-drag-ghost,
+            #view-REGISTRATION .doubles-grid.is-reordering .player-card,
+            #view-REGISTRATION .waiting-bench-track.is-reordering .player-card { transition: none !important; }
+        }
+        /* ===== end drag feel ===== */
+
+
     </style>
 </head>
 <body class="screen-registration registration-ui-pending">
@@ -2424,6 +3150,7 @@
     <div id="view-REGISTRATION" class="screen-view active-view">
         <div class="setup-layout">
             <div class="form-panel">
+                <h2 class="reg-card-title">New Player</h2>
                 <div class="form-group">
                     <label>Player Name</label>
                     <input type="text" id="playerNameInput" placeholder="Ex: Bullseye Bill" autocomplete="off">
@@ -2434,6 +3161,13 @@
                     <div class="camera-wrap">
                         <div class="camera-box" id="cameraBox">
                             <video id="webcamStream" autoplay playsinline muted></video>
+                            <div class="cam-placeholder" aria-hidden="true">
+                                <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="50" cy="40" r="15"/>
+                                    <path d="M22 82c3-15 14-23 28-23s25 8 28 23"/>
+                                </svg>
+                                <span>Camera off</span>
+                            </div>
                             <img id="snapshotPreview" alt="Snapshot">
                             <div class="avatar-guide-shade" aria-hidden="true"></div>
                             <div class="avatar-guide-ring" aria-hidden="true"></div>
@@ -2445,24 +3179,24 @@
                             <div class="cam-zoom-info" id="camZoomInfo" hidden></div>
                             <div class="cam-countdown" id="camCountdown" hidden></div>
                         </div>
-                        <button class="snap-overlay-btn" id="snapBtn">Take Photo!</button>
                     </div>
                 </div>
-                <button class="action-btn" id="addPlayerBtn">Register Player</button>
-                <div class="lineup-bulk-section">
-                    <label>Lineup</label>
-                    <div class="lineup-bulk-row">
-                        <button type="button" class="lineup-bulk-btn" id="fillLineupBtn">Add All</button>
-                        <button type="button" class="lineup-bulk-btn danger" id="clearLineupBtn">Remove All</button>
-                    </div>
-                    <div class="lineup-bulk-row">
-                        <button type="button" class="lineup-bulk-btn" id="randomizeLineupBtn">Randomize</button>
-                    </div>
+                <div class="reg-actions">
+                    <button class="snap-overlay-btn" id="snapBtn">Take Photo!</button>
+                    <button class="action-btn" id="addPlayerBtn">Register Player</button>
                 </div>
             </div>
             <div class="roster-panel" id="rosterPanel">
                 <div class="roster-panel-header">
-                    <label>Current Lineup</label>
+                    <div class="reg-card-heading">
+                        <h2 class="reg-card-title">Lineup</h2>
+                        <span class="lineup-count" id="lineupCount"></span>
+                    </div>
+                    <div class="lineup-tools" role="group" aria-label="Lineup actions">
+                        <button type="button" class="lineup-bulk-btn" id="fillLineupBtn">Add All</button>
+                        <button type="button" class="lineup-bulk-btn" id="randomizeLineupBtn">Randomize</button>
+                        <button type="button" class="lineup-bulk-btn danger" id="clearLineupBtn">Remove All</button>
+                    </div>
                     <div class="lineup-mode-toggle" role="group" aria-label="Lineup mode">
                         <button type="button" class="lineup-mode-btn active" data-lineup-mode="singles" id="lineupModeSingles">Singles</button>
                         <button type="button" class="lineup-mode-btn" data-lineup-mode="doubles" id="lineupModeDoubles">Doubles</button>
@@ -2470,11 +3204,11 @@
                 </div>
                 <div class="grid-container" id="rosterGrid"></div>
                 <div class="doubles-grid" id="doublesGrid" aria-hidden="false"></div>
+                <div class="waiting-bench" id="waitingBench" aria-label="Waiting players">
+                    <div class="waiting-bench-label">Waiting</div>
+                    <div class="waiting-bench-track" id="waitingBenchTrack"></div>
+                </div>
             </div>
-        </div>
-        <div class="waiting-bench" id="waitingBench" aria-label="Waiting players">
-            <div class="waiting-bench-label">Waiting</div>
-            <div class="waiting-bench-track" id="waitingBenchTrack"></div>
         </div>
 
     </div>
@@ -3053,6 +3787,7 @@
             if (visible.length && !visible.some((c) => c.dataset.game === locallySelectedGame)) {
                 updateSelectedGameVisuals(visible[0].dataset.game, false);
             }
+            updateGamesGridFades();
         }
 
         function sendAction(payload) {
@@ -3064,6 +3799,34 @@
             socket.send(JSON.stringify(payload));
             return true;
         }
+
+        /**
+         * Tell the server what screen this Control is on -- the page's usable
+         * size, the pixel ratio the device scales it by, and the browser --
+         * so the log says what a tablet really gives the layout (Android
+         * tablets usually scale a 1920x1200 panel down to ~1280x800 CSS px).
+         * Sent on connect and after a resize settles. Display-only: the
+         * server just logs it.
+         */
+        let clientInfoTimer = null;
+        function reportClientInfo() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            socket.send(JSON.stringify({
+                action: 'CLIENT_INFO',
+                page: 'control',
+                width: window.innerWidth,
+                height: window.innerHeight,
+                screenWidth: window.screen && window.screen.width,
+                screenHeight: window.screen && window.screen.height,
+                dpr: window.devicePixelRatio,
+                touch: navigator.maxTouchPoints || 0,
+                ua: navigator.userAgent
+            }));
+        }
+        window.addEventListener('resize', () => {
+            clearTimeout(clientInfoTimer);
+            clientInfoTimer = setTimeout(reportClientInfo, 800);
+        });
 
         function connectSocket() {
             if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
@@ -3078,6 +3841,7 @@
 
             socket.onopen = () => {
                 console.log('Control socket connected');
+                reportClientInfo();
             };
 
             socket.onclose = () => {
@@ -3128,7 +3892,9 @@
             quick10: 'radial-gradient(circle at 50% 28%, #3d8ec8 0%, #1a5080 40%, #0a2038 78%, #061018 100%)',
             aroundtheworld: 'radial-gradient(circle at 50% 28%, #1d7486 0%, #0f4a5a 42%, #07222c 100%)'
         };
-        const REGISTRATION_BG = "url('/assets/app/viewer_registration.png')";
+        // A JPEG of the Viewer's PNG: the tablet re-decodes this after idle, and
+        // the 2.3 MB PNG took ~22 ms of that on every first touch.
+        const REGISTRATION_BG = "url('/assets/app/registration-bg.jpg')";
 
         const CRICKET_MAX_PLAYERS = 4;
         const X01_MAX_PLAYERS = 4;
@@ -3434,10 +4200,6 @@
         function noteControlLocalActivity() {
             const st = lastKnownControlState;
             if (!st || st.currentScreen !== 'REGISTRATION') return;
-            if (registrationCameraParked) {
-                registrationCameraParked = false;
-                initCameraEngine();
-            }
             armRegistrationIdleTimer(st);
         }
 
@@ -3476,6 +4238,8 @@
                 video.pause();
                 video.srcObject = null;
             }
+            const box = document.getElementById('cameraBox');
+            if (box) box.classList.remove('is-live', 'is-starting');
         }
 
         async function initCameraEngine() {
@@ -3503,6 +4267,7 @@
                     }
                     videoStreamTrack = stream;
                     video.srcObject = stream;
+                    document.getElementById('cameraBox').classList.add('is-live');
                     readHardwareZoom();
                     video.addEventListener('loadedmetadata', syncAvatarGuideMetrics, { once: true });
                     syncAvatarGuideMetrics();
@@ -3514,7 +4279,8 @@
             return cameraInitPromise;
         }
 
-        // Camera only while Registration is active; idle timer parks it after venue.registrationIdleMs
+        // The camera runs only during a take (see takePhoto); the idle timer is
+        // a backstop that releases it after venue.registrationIdleMs regardless.
         document.addEventListener('pointerdown', noteControlLocalActivity, { passive: true });
         document.addEventListener('keydown', noteControlLocalActivity);
 
@@ -3746,6 +4512,12 @@
 
         syncAvatarGuideMetrics();
         window.addEventListener('resize', syncAvatarGuideMetrics);
+        // The camera box now takes whatever height the panel leaves it, so
+        // it can change size without the window resizing (fonts settling,
+        // the error line appearing); keep the ring fitted to it.
+        if (window.ResizeObserver) {
+            new ResizeObserver(() => syncAvatarGuideMetrics()).observe(document.getElementById('cameraBox'));
+        }
         renderCameraZoom();
         // A camera can switch resolution after it starts (some phones do); re-frame.
         document.getElementById('webcamStream').addEventListener('resize', layoutCameraPreview);
@@ -3769,6 +4541,7 @@
         let snapCountdownTimer = null;
 
         function cancelSnapCountdown() {
+            const wasRunning = !!snapCountdownTimer;
             if (snapCountdownTimer) clearTimeout(snapCountdownTimer);
             snapCountdownTimer = null;
             const box = document.getElementById('cameraBox');
@@ -3776,7 +4549,8 @@
             if (box) box.classList.remove('is-counting');
             if (count) { count.hidden = true; count.classList.remove('tick'); }
             const flash = document.getElementById('screenFlash');
-            if (flash) flash.classList.remove('on');
+            // Only a real cancel puts the flash away; after a photo it fades out.
+            if (flash && wasRunning) { flash.classList.remove('on'); flash.hidden = true; }
             const btn = document.getElementById('snapBtn');
             if (btn && btn.innerText.toUpperCase() === 'CANCEL') btn.innerText = 'Take Photo!';
         }
@@ -3794,6 +4568,50 @@
             preview.style.display = 'block';
             box.classList.add('is-previewing');
             btn.innerText = "Retake";
+            releaseCamera();   // the photo is taken; the camera goes off again
+        }
+
+        /** Take Photo / Retake: camera on, wait for a real frame, then count down. */
+        async function takePhoto() {
+            const box = document.getElementById('cameraBox');
+            const preview = document.getElementById('snapshotPreview');
+            const btn = document.getElementById('snapBtn');
+            base64AvatarData = null;
+            preview.style.display = 'none';
+            box.classList.remove('is-previewing');
+            btn.innerText = 'Cancel';
+            box.classList.add('is-starting');
+            const session = cameraSessionId;
+            await initCameraEngine();
+            const video = document.getElementById('webcamStream');
+            if (session !== cameraSessionId) return;   // cancelled while starting
+            if (!videoStreamTrack) {
+                box.classList.remove('is-starting');
+                btn.innerText = 'Take Photo!';
+                showRegistrationCameraError();
+                return;
+            }
+            // Count from the first frame, so the countdown is time in front of
+            // a live picture, not time waiting for the camera to wake.
+            if (video.readyState < 2) {
+                await new Promise((resolve) => {
+                    const done = () => { clearTimeout(t); video.removeEventListener('loadeddata', done); resolve(); };
+                    const t = setTimeout(done, 4000);
+                    video.addEventListener('loadeddata', done);
+                });
+            }
+            if (session !== cameraSessionId) return;
+            video.play().catch(() => {});
+            box.classList.remove('is-starting');
+            syncAvatarGuideMetrics();
+            startSnapCountdown();
+        }
+
+        function showRegistrationCameraError() {
+            const el = document.getElementById('registrationError');
+            if (!el) return;
+            el.textContent = 'Camera unavailable. Register without a photo, or check the camera.';
+            el.hidden = false;
         }
 
         function startSnapCountdown() {
@@ -3810,11 +4628,14 @@
                     box.classList.remove('is-counting');
                     count.hidden = true;
                     const flash = document.getElementById('screenFlash');
+                    flash.hidden = false;
                     flash.classList.add('on');
                     snapCountdownTimer = setTimeout(() => {
                         snapCountdownTimer = null;
                         snapNow();
                         flash.classList.remove('on');
+                        // Out of the page again once the white has faded.
+                        setTimeout(() => { if (!flash.classList.contains('on')) flash.hidden = true; }, 450);
                     }, SNAP_FLASH_LEAD_MS);
                     return;
                 }
@@ -3833,21 +4654,18 @@
             const btn = document.getElementById('snapBtn');
             const label = btn.innerText.toUpperCase();
             if (label === 'CANCEL') {
-                cancelSnapCountdown();
-            } else if (label === "TAKE PHOTO!") {
-                startSnapCountdown();
+                releaseCamera();   // stops the countdown too
+                btn.innerText = 'Take Photo!';
             } else {
-                base64AvatarData = null;
-                preview.style.display = 'none';
-                box.classList.remove('is-previewing');
-                btn.innerText = "Take Photo!";
+                // Take Photo, or Retake: either way, a fresh take.
+                takePhoto();
             }
         });
 
         document.getElementById('addPlayerBtn').addEventListener('click', () => {
             const input = document.getElementById('playerNameInput'); const name = input.value.trim();
             if(name) {
-                cancelSnapCountdown();
+                releaseCamera();   // stops any countdown too
                 sendAction({ action: 'ADD_PLAYER', name, avatar: base64AvatarData });
                 input.value = ''; base64AvatarData = null;
                 document.getElementById('snapshotPreview').style.display = 'none';
@@ -3893,7 +4711,7 @@
             const isFirstPaint =
                 !layer1.classList.contains('active-layer') &&
                 !layer2.classList.contains('active-layer');
-            const REGISTRATION_BG_SRC = '/assets/app/viewer_registration.png';
+            const REGISTRATION_BG_SRC = '/assets/app/registration-bg.jpg';
 
             const reveal = () => {
                 // Left registration while the image was still decoding
@@ -4164,6 +4982,39 @@
             }
             grid.addEventListener('touchend', endTouch, { passive: true });
             grid.addEventListener('touchcancel', () => { touch = null; grid.classList.remove('is-dragging'); }, { passive: true });
+        })();
+
+        /** Fade whichever edges have cards beyond them (see .games-grid.more-*).
+         *  Checked at most once a frame while scrolling, and when the strip or
+         *  the set of cards changes; it does nothing while the screen is still. */
+        // var, not let: the category tabs are set up (and call this) earlier in
+        // the script than this line runs.
+        var gamesGridFadeFrame = 0;
+        function updateGamesGridFades() {
+            if (gamesGridFadeFrame) return;
+            // Only on the game screen: elsewhere the strip isn't shown, and the
+            // check would force a layout on every update for nothing. Arriving
+            // on the game screen resizes the strip, which checks again.
+            const st = lastKnownControlState;
+            if (st && st.currentScreen && st.currentScreen !== 'GAME_SELECTION') return;
+            gamesGridFadeFrame = requestAnimationFrame(() => {
+                gamesGridFadeFrame = 0;
+                const grid = document.querySelector('.games-grid');
+                if (!grid) return;
+                const max = grid.scrollWidth - grid.clientWidth;
+                // A couple of pixels of slack: subpixel layout can leave the
+                // end a fraction short of the maximum.
+                grid.classList.toggle('more-left', max > 2 && grid.scrollLeft > 2);
+                grid.classList.toggle('more-right', max > 2 && grid.scrollLeft < max - 2);
+            });
+        }
+        (function watchGamesGridFades() {
+            const grid = document.querySelector('.games-grid');
+            if (!grid) return;
+            grid.addEventListener('scroll', updateGamesGridFades, { passive: true });
+            if (typeof ResizeObserver === 'function') new ResizeObserver(updateGamesGridFades).observe(grid);
+            window.addEventListener('resize', updateGamesGridFades);
+            updateGamesGridFades();
         })();
 
         document.getElementById('btnSelectionBack').addEventListener('click', () => sendAction({ action: 'NAVIGATE', screen: 'REGISTRATION' }));
@@ -5003,20 +5854,8 @@
                 }
 
                 if (state.currentScreen === 'REGISTRATION') {
-                    if (registrationCameraParked) {
-                        releaseCamera();
-                    } else {
-                        const video = document.getElementById('webcamStream');
-                        if (!video.srcObject) {
-                            initCameraEngine();
-                        } else {
-                            video.play().catch(() => {
-                                releaseCamera();
-                                initCameraEngine();
-                            });
-                        }
-                        armRegistrationIdleTimer(state);
-                    }
+                    // No camera here until someone presses Take Photo.
+                    armRegistrationIdleTimer(state);
                 } else {
                     registrationCameraParked = false;
                     clearRegistrationIdleTimer();
@@ -5095,8 +5934,25 @@
             ghost: null,
             ghostOffsetX: 0,
             ghostOffsetY: 0,
-            lastTarget: null
+            lastTarget: null,
+            lastX: 0,
+            lastY: 0,
+            holdTimer: null,
+            originRect: null,
+            frame: null,
+            fromBench: false
         };
+        /* Touch lifts a card after a short hold, like iOS, or at once if the
+           finger starts moving first. Mouse drags start on a small move. */
+        const PLAYER_CARD_HOLD_MS = 160;
+        /* A state update that arrives mid-drag is held here and applied when
+           the finger lifts -- rebuilding the lineup under a drag used to
+           cancel it. */
+        let pendingLineupRenderState = null;
+
+        function hapticTap(ms) {
+            try { if (navigator.vibrate) navigator.vibrate(ms); } catch (_) {}
+        }
 
         function buildDragPayload(p, dragMeta) {
             const payload = { playerId: p.id, kind: dragMeta.kind };
@@ -5133,15 +5989,33 @@
             };
         }
 
+        /* The lifted card follows the finger by transform, once per frame, and
+           the hover work (hit-test, neighbours making way) runs in that same
+           frame: a touchscreen can report moves faster than the display draws,
+           and each hover pass reads layout. */
+        function placeLift(wrap, x, y) {
+            wrap.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        }
         function positionPlayerCardGhost(clientX, clientY) {
-            const ghost = playerCardPointerDrag.ghost;
-            if (!ghost) return;
-            ghost.style.left = `${clientX - playerCardPointerDrag.ghostOffsetX}px`;
-            ghost.style.top = `${clientY - playerCardPointerDrag.ghostOffsetY}px`;
+            const d = playerCardPointerDrag;
+            if (!d.ghost) return;
+            d.lastX = clientX;
+            d.lastY = clientY;
+            if (d.frame) return;
+            d.frame = requestAnimationFrame(() => {
+                d.frame = null;
+                if (d.ghost) placeLift(d.ghost, d.lastX - d.ghostOffsetX, d.lastY - d.ghostOffsetY);
+                if (d.active) updatePlayerCardPointerHover(d.lastX, d.lastY);
+            });
         }
 
-        function createPlayerCardGhost(card, clientX, clientY) {
+        function createPlayerCardGhost(card, clientX, clientY, { prepare = false } = {}) {
             const rect = card.getBoundingClientRect();
+            const wrap = document.createElement('div');
+            wrap.className = 'drag-lift' + (card.dataset.bench === '1' ? ' from-bench' : '');
+            wrap.style.width = `${rect.width}px`;
+            wrap.style.height = `${rect.height}px`;
+            wrap.style.setProperty('--card-h', `${rect.height}px`);
             const ghost = card.cloneNode(true);
             ghost.classList.add('player-card-drag-ghost');
             ghost.classList.remove(
@@ -5153,13 +6027,89 @@
             );
             ghost.removeAttribute('id');
             ghost.querySelectorAll('.card-del').forEach((btn) => btn.remove());
-            ghost.style.width = `${rect.width}px`;
-            ghost.style.height = `${rect.height}px`;
+            wrap.appendChild(ghost);
             playerCardPointerDrag.ghostOffsetX = clientX - rect.left;
             playerCardPointerDrag.ghostOffsetY = clientY - rect.top;
-            document.body.appendChild(ghost);
-            playerCardPointerDrag.ghost = ghost;
+            playerCardPointerDrag.originRect = rect;
+            if (prepare) wrap.classList.add('is-preparing');
+            document.body.appendChild(wrap);
+            placeLift(wrap, rect.left, rect.top);
+            playerCardPointerDrag.ghost = wrap;
+            if (prepare) return;
+            // Next frame, so the lift animates from the card's own size.
+            requestAnimationFrame(() => wrap.classList.add('is-lifted'));
+        }
+
+        /* On release the lifted card glides to where it lands -- its seat,
+           its gap on the bench, or back where it came from -- and fades
+           into the real card the server's update draws there. */
+        function settleLift(wrap, rect) {
+            if (!wrap) return;
+            if (!rect) { wrap.remove(); return; }
+            wrap.classList.remove('is-lifted');
+            wrap.classList.add('is-settling');
+            wrap.style.width = `${rect.width}px`;
+            wrap.style.height = `${rect.height}px`;
+            wrap.style.setProperty('--card-h', `${rect.height}px`);
+            placeLift(wrap, rect.left, rect.top);
+            setTimeout(() => {
+                wrap.classList.add('is-fading');
+                setTimeout(() => wrap.remove(), 140);
+            }, 210);
+        }
+
+        /** Where a drop will land, measured before the drop clears the previews. */
+        function landingRectFor(target, payload) {
+            const d = playerCardPointerDrag;
+            if (!target || !payload) return d.originRect;
+            if (target.zone === 'lineup') {
+                const toFlat = lineupDock.active ? lineupDock.toFlat : target.flat;
+                const slot = getLineupSlotEls().find((el) => Number(el.dataset.flatIdx) === toFlat);
+                return slot ? slot.getBoundingClientRect() : d.originRect;
+            }
+            if (target.zone === 'bench') {
+                const track = document.getElementById('waitingBenchTrack');
+                if (!track) return d.originRect;
+                const others = getWaitingOtherCards();
+                const sample = others[0];
+                const size = sample ? sample.getBoundingClientRect()
+                    : (d.fromBench ? d.originRect : { width: 96, height: 120 });
+                const tr = track.getBoundingClientRect();
+                const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+                const idx = Math.min(waitingDock.insertIndex || 0, others.length);
+                let left;
+                if (idx < others.length) {
+                    left = others[idx].getBoundingClientRect().left - waitingCardSlotPx();
+                } else if (others.length) {
+                    left = others[others.length - 1].getBoundingClientRect().right + gap;
+                } else {
+                    left = tr.left + 2;
+                }
+                const top = tr.top + (tr.height - size.height) / 2;
+                return { left, top, width: size.width, height: size.height };
+            }
+            return d.originRect;
+        }
+
+        /** Lift the card the finger is on: the start of a real drag. */
+        function activatePlayerCardDrag(clientX, clientY) {
+            const d = playerCardPointerDrag;
+            if (d.active || !d.tracking || !d.card) return;
+            if (d.holdTimer) { clearTimeout(d.holdTimer); d.holdTimer = null; }
+            d.active = true;
+            try { d.card.setPointerCapture(d.pointerId); } catch (_) {}
+            if (d.ghost && d.ghost.classList.contains('is-preparing')) {
+                // Built during the hold: just show it and lift.
+                const wrap = d.ghost;
+                wrap.classList.remove('is-preparing');
+                requestAnimationFrame(() => wrap.classList.add('is-lifted'));
+            } else {
+                createPlayerCardGhost(d.card, d.startX, d.startY);
+            }
             positionPlayerCardGhost(clientX, clientY);
+            d.card.classList.add('dragging');
+            startPlayerCardDockPreview(d.payload);
+            hapticTap(10);
         }
 
         function clearPlayerCardGhost() {
@@ -5229,19 +6179,33 @@
                 return;
             }
             const toFlat = lineupDock.active ? lineupDock.toFlat : target.flat;
-            clearLineupDockDrag();
             clearWaitingDockDrag();
             if (target.mode === 'doubles') {
                 const toTeamDrop = Math.floor(toFlat / 2);
                 const toSlotDrop = toFlat % 2;
                 if (payload.kind === 'doubles'
                     && Number(payload.fromTeam) === toTeamDrop
-                    && Number(payload.fromSlot) === toSlotDrop) return;
+                    && Number(payload.fromSlot) === toSlotDrop) { clearLineupDockDrag(); return; }
+                holdLineupDockUntilUpdate();
                 sendLineupDrop(payload, { mode: 'doubles', teamIdx: toTeamDrop, slotIdx: toSlotDrop });
                 return;
             }
-            if (payload.kind === 'singles' && Number(payload.fromSlot) === toFlat) return;
+            if (payload.kind === 'singles' && Number(payload.fromSlot) === toFlat) { clearLineupDockDrag(); return; }
+            holdLineupDockUntilUpdate();
             sendLineupDrop(payload, { mode: 'singles', slotIdx: toFlat });
+        }
+
+        /* After a drop is sent, the slid cards already show the new order: keep
+           them as they are until the server's update draws it for real, so the
+           grid repaints once, not twice (clear the slides, then redraw). If no
+           update comes -- a refused move -- the slides clear on their own. */
+        let lineupDockClearTimer = null;
+        function holdLineupDockUntilUpdate() {
+            clearTimeout(lineupDockClearTimer);
+            lineupDockClearTimer = setTimeout(() => {
+                lineupDockClearTimer = null;
+                clearLineupDockDrag();
+            }, 1500);
         }
 
         function resetPlayerCardPointerDrag() {
@@ -5251,8 +6215,11 @@
                 try { card.releasePointerCapture(pointerId); } catch (_) {}
             }
             if (card) card.classList.remove('dragging');
+            if (playerCardPointerDrag.holdTimer) clearTimeout(playerCardPointerDrag.holdTimer);
+            if (playerCardPointerDrag.frame) cancelAnimationFrame(playerCardPointerDrag.frame);
+            playerCardPointerDrag.holdTimer = null;
+            playerCardPointerDrag.frame = null;
             clearPlayerCardGhost();
-            document.body.classList.remove('is-player-card-dragging');
             playerCardPointerDrag.tracking = false;
             playerCardPointerDrag.active = false;
             playerCardPointerDrag.pointerId = null;
@@ -5263,16 +6230,33 @@
 
         function endPlayerCardPointerDrag(clientX, clientY, cancelled) {
             if (!playerCardPointerDrag.tracking && !playerCardPointerDrag.active) return;
+            if (playerCardPointerDrag.active && playerCardPointerDrag.frame) {
+                // The last move's frame hasn't run: do its hover now, so the
+                // drop lands where the finger actually was.
+                cancelAnimationFrame(playerCardPointerDrag.frame);
+                playerCardPointerDrag.frame = null;
+                updatePlayerCardPointerHover(playerCardPointerDrag.lastX, playerCardPointerDrag.lastY);
+            }
             const payload = playerCardPointerDrag.payload;
             const wasActive = playerCardPointerDrag.active;
             const target = playerCardPointerDrag.lastTarget
                 || (wasActive ? resolvePlayerCardDropTarget(clientX, clientY) : null);
+            const dropping = wasActive && !cancelled && !!payload && !!target;
+            const landing = wasActive ? (dropping ? landingRectFor(target, payload) : playerCardPointerDrag.originRect) : null;
+            const lift = playerCardPointerDrag.ghost;
+            playerCardPointerDrag.ghost = null;           // settled below, not torn down by reset
             resetPlayerCardPointerDrag();
-            if (!wasActive || cancelled || !payload) {
+            if (lift) settleLift(lift, landing);
+            const held = pendingLineupRenderState;
+            pendingLineupRenderState = null;
+            if (!dropping) {
                 clearWaitingDockDrag();
                 clearLineupDockDrag();
+                // Nothing was sent, so no update is coming: draw what arrived mid-drag.
+                if (held) renderRegistrationLineup(held);
                 return;
             }
+            hapticTap(6);
             commitPlayerCardPointerDrop(target, payload);
         }
 
@@ -5281,25 +6265,15 @@
             const dx = e.clientX - playerCardPointerDrag.startX;
             const dy = e.clientY - playerCardPointerDrag.startY;
 
+            playerCardPointerDrag.lastX = e.clientX;
+            playerCardPointerDrag.lastY = e.clientY;
             if (!playerCardPointerDrag.active) {
                 if (Math.hypot(dx, dy) < PLAYER_CARD_DRAG_THRESHOLD_PX) return;
-                playerCardPointerDrag.active = true;
-                document.body.classList.add('is-player-card-dragging');
-                try {
-                    playerCardPointerDrag.card.setPointerCapture(playerCardPointerDrag.pointerId);
-                } catch (_) {}
-                createPlayerCardGhost(
-                    playerCardPointerDrag.card,
-                    e.clientX,
-                    e.clientY
-                );
-                playerCardPointerDrag.card.classList.add('dragging');
-                startPlayerCardDockPreview(playerCardPointerDrag.payload);
+                activatePlayerCardDrag(e.clientX, e.clientY);
             }
 
             if (e.cancelable) e.preventDefault();
             positionPlayerCardGhost(e.clientX, e.clientY);
-            updatePlayerCardPointerHover(e.clientX, e.clientY);
         }
 
         function onPlayerCardPointerUp(e) {
@@ -5325,11 +6299,56 @@
             playerCardPointerDrag.payload = buildDragPayload(p, dragMeta);
             playerCardPointerDrag.card = card;
             playerCardPointerDrag.lastTarget = null;
+            playerCardPointerDrag.lastX = e.clientX;
+            playerCardPointerDrag.lastY = e.clientY;
+            playerCardPointerDrag.fromBench = !!(dragMeta && dragMeta.kind === 'bench');
+            if (e.pointerType === 'touch') {
+                createPlayerCardGhost(card, e.clientX, e.clientY, { prepare: true });
+                // A held finger lifts the card without having to move first.
+                playerCardPointerDrag.holdTimer = setTimeout(() => {
+                    playerCardPointerDrag.holdTimer = null;
+                    const d = playerCardPointerDrag;
+                    if (d.tracking && !d.active) activatePlayerCardDrag(d.lastX, d.lastY);
+                }, PLAYER_CARD_HOLD_MS);
+            }
         }
 
         document.addEventListener('pointermove', onPlayerCardPointerMove, { passive: false });
         document.addEventListener('pointerup', onPlayerCardPointerUp);
         document.addEventListener('pointercancel', onPlayerCardPointerCancel);
+
+        /*
+         * Player cards are kept and reused between renders, one per player:
+         * an update moves the existing card into its new slot rather than
+         * building a new one. A rebuilt card meant a new <img> for its photo,
+         * and the tablet decoded and drew every photo again on every update
+         * -- the hitch right after a drop. The card's place (seat, team,
+         * bench) is set on the element and read by its handlers when they
+         * fire, so a moved card always acts from where it is now.
+         */
+        const playerCardCache = new Map();   // playerId -> card element
+
+        function setPlayerCardMeta(card, p, dragMeta) {
+            card._player = p;
+            card._meta = dragMeta || null;
+            const isSeated = !!(dragMeta && (dragMeta.kind === 'singles' || dragMeta.kind === 'doubles'));
+            card._isSeated = isSeated;
+            const delBtn = card.querySelector('.card-del');
+            if (delBtn) delBtn.title = isSeated ? 'Remove from lineup' : 'Delete player';
+            delete card.dataset.bench;
+            delete card.dataset.slotIdx;
+            delete card.dataset.teamIdx;
+            card.classList.toggle('player-card-draggable', !!dragMeta);
+            if (!dragMeta) return;
+            if (dragMeta.kind === 'bench') {
+                card.dataset.bench = '1';
+            } else if (dragMeta.kind === 'singles') {
+                card.dataset.slotIdx = String(dragMeta.slotIdx);
+            } else if (dragMeta.kind === 'doubles') {
+                card.dataset.teamIdx = String(dragMeta.teamIdx);
+                card.dataset.slotIdx = String(dragMeta.slotIdx);
+            }
+        }
 
         function buildPlayerCardElement(p, dragMeta) {
             const card = document.createElement('div');
@@ -5337,33 +6356,40 @@
             const avatarRender = p.avatar
                 ? `<img src="${p.avatar}" alt="user" draggable="false">`
                 : `<div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:3rem; color:var(--gold-glow); font-family:inherit;">${p.name[0].toUpperCase()}</div>`;
-            const isSeated = dragMeta && (dragMeta.kind === 'singles' || dragMeta.kind === 'doubles');
-            card.innerHTML = `<button class="card-del" title="${isSeated ? 'Remove from lineup' : 'Delete player'}">×</button><div class="card-avatar">${avatarRender}</div><div class="player-name-display">${p.name}</div>`;
+            card.innerHTML = `<button class="card-del">×</button><div class="card-avatar">${avatarRender}</div><div class="player-name-display">${p.name}</div>`;
             card.dataset.playerId = p.id;
+            card._name = p.name;
+            card._avatar = p.avatar || '';
+            setPlayerCardMeta(card, p, dragMeta);
             const delBtn = card.querySelector('.card-del');
             if (delBtn) {
                 delBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
                 // Seated (singles/doubles slot): X unseats back to the waiting bench.
                 // Bench card: X deletes the player outright -- there's no slot to unseat from.
                 delBtn.addEventListener('click', () => {
-                    if (isSeated) unseatPlayer(p.id, dragMeta);
-                    else deletePlayer(p.id);
+                    if (card._isSeated) unseatPlayer(card._player.id, card._meta);
+                    else deletePlayer(card._player.id);
                 });
             }
-            if (dragMeta) {
-                card.classList.add('player-card-draggable');
-                if (dragMeta.kind === 'bench') {
-                    card.dataset.bench = '1';
-                } else if (dragMeta.kind === 'singles') {
-                    card.dataset.slotIdx = String(dragMeta.slotIdx);
-                } else if (dragMeta.kind === 'doubles') {
-                    card.dataset.teamIdx = String(dragMeta.teamIdx);
-                    card.dataset.slotIdx = String(dragMeta.slotIdx);
-                }
-                card.addEventListener('pointerdown', (e) => {
-                    beginPlayerCardPointerTrack(e, card, p, dragMeta);
-                });
+            card.addEventListener('pointerdown', (e) => {
+                if (!card._meta) return;
+                beginPlayerCardPointerTrack(e, card, card._player, card._meta);
+            });
+            return card;
+        }
+
+        /** This player's card, reused when its name and photo are unchanged. */
+        function playerCardFor(p, dragMeta) {
+            let card = playerCardCache.get(p.id);
+            if (card && card._name === p.name && card._avatar === (p.avatar || '')) {
+                card.classList.remove('dragging', 'lineup-drag-source', 'waiting-drag-source', 'waiting-slide', 'drag-over');
+                card.style.removeProperty('transform');
+                card.style.removeProperty('--waiting-slide');
+                setPlayerCardMeta(card, p, dragMeta);
+                return card;
             }
+            card = buildPlayerCardElement(p, dragMeta);
+            playerCardCache.set(p.id, card);
             return card;
         }
 
@@ -5418,7 +6444,7 @@
         function fillLineupSlot(slotEl, player, dragMeta) {
             slotEl.innerHTML = '';
             if (player) {
-                slotEl.appendChild(buildPlayerCardElement(player, dragMeta));
+                slotEl.appendChild(playerCardFor(player, dragMeta));
             } else {
                 const empty = document.createElement('div');
                 empty.className = 'doubles-slot-empty';
@@ -5473,11 +6499,13 @@
         }
 
         function clearLineupDockDrag() {
+            if (lineupDockClearTimer) { clearTimeout(lineupDockClearTimer); lineupDockClearTimer = null; }
             lineupDock.active = false;
             lineupDock.mode = null;
             lineupDock.playerId = null;
             lineupDock.fromFlat = -1;
             lineupDock.toFlat = 0;
+            lineupDock.appliedKey = null;
             const grid = document.getElementById('doublesGrid');
             if (grid) grid.classList.remove('is-reordering');
             getLineupSlotEls().forEach((slot) => {
@@ -5495,6 +6523,7 @@
             lineupDock.playerId = playerId;
             lineupDock.fromFlat = fromFlat;
             lineupDock.toFlat = fromFlat >= 0 ? fromFlat : 0;
+            lineupDock.appliedKey = null;
             const grid = document.getElementById('doublesGrid');
             if (grid) grid.classList.add('is-reordering');
             const slots = getLineupSlotEls();
@@ -5525,6 +6554,11 @@
 
         function applyLineupDockSlides(toFlat) {
             lineupDock.toFlat = toFlat;
+            // Same target, same card: the slides already show it. Each pass
+            // rewrites every slot and reads every slot's rect, so skip repeats.
+            const key = `${toFlat}|${lineupDock.fromFlat}|${lineupDock.playerId}`;
+            if (lineupDock.appliedKey === key) return;
+            lineupDock.appliedKey = key;
             const grid = document.getElementById('doublesGrid');
             if (grid) grid.classList.add('is-reordering');
 
@@ -5610,7 +6644,16 @@
             return ordered;
         }
 
-        const WAITING_CARD_SLOT_PX = 114; // 104px card + 10px gap
+        /** One bench card plus the track's gap: how far later cards slide to
+         *  open a gap while dragging. Measured, because the card size now
+         *  scales with the screen. */
+        function waitingCardSlotPx() {
+            const track = document.getElementById('waitingBenchTrack');
+            const card = track && track.querySelector('.player-card:not(.waiting-drag-source)');
+            if (!card) return 114;
+            const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+            return card.offsetWidth + gap;
+        }
         let waitingDock = {
             active: false,
             playerId: null,
@@ -5631,6 +6674,7 @@
             waitingDock.playerId = null;
             waitingDock.insertIndex = 0;
             waitingDock.beforePlayerId = null;
+            waitingDock.appliedIndex = null;
             const bench = document.getElementById('waitingBench');
             const track = document.getElementById('waitingBenchTrack');
             if (bench) bench.classList.remove('drag-over');
@@ -5654,6 +6698,7 @@
                 (el) => el.dataset.playerId === playerId
             );
             if (source) source.classList.add('waiting-drag-source');
+            waitingDock.appliedIndex = null;
             applyWaitingDockSlides(waitingDock.insertIndex);
         }
 
@@ -5678,13 +6723,16 @@
         }
 
         function applyWaitingDockSlides(insertIndex) {
+            if (waitingDock.appliedIndex === insertIndex) return;
+            waitingDock.appliedIndex = insertIndex;
             waitingDock.insertIndex = insertIndex;
             waitingDock.beforePlayerId = beforePlayerIdForInsert(insertIndex);
             const others = getWaitingOtherCards();
+            const slotPx = waitingCardSlotPx();
             others.forEach((el, i) => {
                 if (i >= insertIndex) {
                     el.classList.add('waiting-slide');
-                    el.style.setProperty('--waiting-slide', `${WAITING_CARD_SLOT_PX}px`);
+                    el.style.setProperty('--waiting-slide', `${slotPx}px`);
                 } else {
                     el.classList.remove('waiting-slide');
                     el.style.removeProperty('--waiting-slide');
@@ -5749,10 +6797,28 @@
                 return;
             }
             bench.forEach((p) => {
-                const card = buildPlayerCardElement(p, { kind: 'bench' });
-                card.dataset.playerId = p.id;
+                const card = playerCardFor(p, { kind: 'bench' });
                 track.appendChild(card);
             });
+        }
+
+        /** "3 / 6" in singles; "4 players · 2 teams" in doubles. */
+        function renderLineupCount(state, isDoubles) {
+            const el = document.getElementById('lineupCount');
+            if (!el) return;
+            if (!isDoubles) {
+                const seated = (state.singlesLineup || []).filter(Boolean).length;
+                el.innerHTML = Array.from({ length: 6 }, (_, i) =>
+                    `<span class="seat-pip${i < seated ? ' on' : ''}"></span>`).join('');
+                el.title = `${seated} of 6 seated`;
+                el.setAttribute('aria-label', `${seated} of 6 seated`);
+                el.classList.toggle('is-full', seated >= 6);
+                return;
+            }
+            const teams = (state.doublesTeams || []).map((t) => (t || []).filter(Boolean)).filter((t) => t.length);
+            const people = teams.reduce((n, t) => n + t.length, 0);
+            el.textContent = `${people} player${people === 1 ? '' : 's'} · ${teams.length} team${teams.length === 1 ? '' : 's'}`;
+            el.classList.remove('is-full');
         }
 
         function renderLineupRoster(state) {
@@ -5763,24 +6829,54 @@
             const byId = {};
             (state.players || []).forEach(p => { byId[p.id] = p; });
 
-            doublesGrid.innerHTML = '';
+            renderLineupCount(state, isDoubles);
 
             if (!isDoubles) {
                 const lineup = (state.singlesLineup && state.singlesLineup.length)
                     ? state.singlesLineup
                     : Array.from({ length: 12 }, () => null);
+                // The twelve seats are kept, and only a seat whose occupant
+                // changed is touched: on the tablet every repainted empty seat
+                // (a blurred, recessed well) cost real GPU time, and a drop
+                // repainted all eleven.
+                let slots = doublesGrid._singlesSlots;
+                if (!slots || !slots.every((el) => el.parentNode === doublesGrid)) {
+                    doublesGrid.innerHTML = '';
+                    slots = [];
+                    for (let i = 0; i < 12; i++) {
+                        const slotEl = document.createElement('div');
+                        slotEl.className = 'doubles-slot';
+                        slotEl.dataset.slotIdx = String(i);
+                        bindSinglesSlotDrop(slotEl, i);
+                        doublesGrid.appendChild(slotEl);
+                        slots.push(slotEl);
+                    }
+                    doublesGrid._singlesSlots = slots;
+                }
+                // Every seat keeps its well for good, and a seated card sits on
+                // top of it: emptying a seat just uncovers a well that's
+                // already drawn, instead of building (and rastering) a new one.
                 for (let i = 0; i < 12; i++) {
-                    const slotEl = document.createElement('div');
-                    slotEl.className = 'doubles-slot';
-                    slotEl.dataset.slotIdx = String(i);
-                    bindSinglesSlotDrop(slotEl, i);
+                    const slotEl = slots[i];
+                    if (!slotEl._well) {
+                        slotEl.replaceChildren();
+                        fillLineupSlot(slotEl, null, null);
+                        slotEl._well = slotEl.firstElementChild;
+                        slotEl._card = null;
+                    }
                     const playerId = lineup[i];
                     const player = playerId ? byId[playerId] : null;
-                    fillLineupSlot(slotEl, player, player ? { kind: 'singles', slotIdx: i } : null);
-                    doublesGrid.appendChild(slotEl);
+                    const card = player ? playerCardFor(player, { kind: 'singles', slotIdx: i }) : null;
+                    if (slotEl._card === card && (!card || card.parentNode === slotEl)) continue;
+                    if (slotEl._card && slotEl._card.parentNode === slotEl) slotEl._card.remove();
+                    if (card) slotEl.appendChild(card);
+                    slotEl._card = card;
                 }
                 return;
             }
+
+            doublesGrid._singlesSlots = null;
+            doublesGrid.innerHTML = '';
 
             const teams = (state.doublesTeams && state.doublesTeams.length)
                 ? state.doublesTeams
@@ -5830,14 +6926,39 @@
         }
 
         function renderRegistrationLineup(state) {
-            // State refresh rebuilds cards — abort any in-flight pointer drag
-            if (playerCardPointerDrag.tracking || playerCardPointerDrag.active) {
+            // A live drag is never cancelled by an update: hold the update
+            // and draw it when the finger lifts (endPlayerCardPointerDrag).
+            if (playerCardPointerDrag.active) {
+                pendingLineupRenderState = state;
+                return;
+            }
+            // A press that hasn't lifted a card yet is simply dropped -- the
+            // card under it is about to be rebuilt.
+            if (playerCardPointerDrag.tracking) {
                 endPlayerCardPointerDrag(0, 0, true);
             }
             const mode = state.lineupMode === 'doubles' ? 'doubles' : 'singles';
+            // Most updates (a dart, a timer, a setting) leave the lineup as it
+            // was: then there is nothing to draw.
+            const sig = lineupRenderSignature(state);
+            if (sig === lastLineupRenderSig) return;
+            lastLineupRenderSig = sig;
             applyLineupModeUI(mode);
             renderLineupRoster(state);
             renderWaitingBench(state);
+            const present = new Set((state.players || []).map((p) => p.id));
+            playerCardCache.forEach((_, id) => { if (!present.has(id)) playerCardCache.delete(id); });
+        }
+
+        let lastLineupRenderSig = null;
+        /** Everything the lineup and bench are drawn from, as one string. */
+        function lineupRenderSignature(state) {
+            const players = (state.players || []).map((p) =>
+                `${p.id}:${p.name}:${p.avatar ? p.avatar.length + p.avatar.slice(-24) : ''}`);
+            return JSON.stringify([
+                state.lineupMode, state.singlesLineup, state.doublesTeams,
+                getBenchPlayersFromState(state).map((p) => p.id), players
+            ]);
         }
 
         (function initLineupModeToggle() {
@@ -5854,6 +6975,6 @@
 
         connectSocket();
     </script>
-    <div class="screen-flash" id="screenFlash" aria-hidden="true"></div>
+    <div class="screen-flash" id="screenFlash" aria-hidden="true" hidden></div>
 </body>
 </html>

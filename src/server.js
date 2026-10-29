@@ -155,6 +155,76 @@ app.post(
     }
 );
 
+/* --- deploy: health and restart --------------------------------------------
+ * The rigs run under run.sh, a loop that relaunches the server whenever it
+ * exits and pulls first only when data/update.json asks it to (see
+ * scripts/update-policy.js). So deploying is: push, then
+ *
+ *     POST /api/restart  {"update": true}
+ *
+ * which sets the one-shot updateOnNextRestart flag and exits; the loop pulls
+ * and relaunches. Without "update" it is a plain restart on the code already
+ * there. Same shape as OpenDarts' /api/restart, so one habit deploys both.
+ *
+ * Refused (409) while a game is being played unless the body says
+ * "force": true -- a restart drops the match. Refused (409) when not running
+ * under run.sh, because then exiting would just stop FlightDeck.
+ *
+ * GET /api/health reports the code that is RUNNING (the commit read at
+ * startup), not the checkout, so it can confirm a deploy actually landed.
+ */
+const UPDATE_FILE = path.join(ROOT, 'data', 'update.json');
+const STARTED_AT = new Date().toISOString();
+const RUNNING_BUILD = (() => {
+    const git = (args) => {
+        try {
+            return require('child_process').execFileSync('git', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+        } catch (_) { return null; }
+    };
+    return { code_version: git(['rev-parse', '--short', 'HEAD']), branch: git(['rev-parse', '--abbrev-ref', 'HEAD']) };
+})();
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        ok: true,
+        version: APP_VERSION,
+        build: RUNNING_BUILD,
+        startedAt: STARTED_AT,
+        supervised: process.env.FD_SUPERVISED === '1',
+        screen: gameState ? gameState.currentScreen : null
+    });
+});
+
+app.post('/api/restart', express.json({ limit: '4kb' }), (req, res) => {
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const update = body.update === true;
+    const force = body.force === true;
+    if (process.env.FD_SUPERVISED !== '1') {
+        res.status(409).json({ ok: false, error: 'not running under run.sh -- exiting would stop FlightDeck, not restart it' });
+        return;
+    }
+    if (!force && gameState && gameState.currentScreen === 'IN_GAME') {
+        res.status(409).json({ ok: false, error: 'a game is in progress -- send "force": true to restart anyway', screen: gameState.currentScreen });
+        return;
+    }
+    if (update) {
+        try {
+            let cfg = {};
+            if (fs.existsSync(UPDATE_FILE)) cfg = JSON.parse(fs.readFileSync(UPDATE_FILE, 'utf8')) || {};
+            cfg.updateOnNextRestart = true;
+            fs.mkdirSync(path.dirname(UPDATE_FILE), { recursive: true });
+            fs.writeFileSync(UPDATE_FILE, JSON.stringify(cfg, null, 2) + '\n');
+        } catch (err) {
+            res.status(500).json({ ok: false, error: `could not set the update flag: ${err.message}` });
+            return;
+        }
+    }
+    console.log(`[RESTART] requested from ${req.ip}${update ? ' with update' : ''}${force ? ' (forced)' : ''} -- exiting for run.sh to relaunch`);
+    res.json({ ok: true, update, from: RUNNING_BUILD.code_version });
+    // Let the response and the log line get out first.
+    setTimeout(() => process.exit(0), 300);
+});
+
 // extensions: ['html'] lets /control and /viewer resolve to control.html/viewer.html
 // without a redirect — /control.html etc. still work exactly as before, this just adds
 // the shorter path as an alternative.
@@ -1198,6 +1268,7 @@ function syncOpenDartsThrowCorrect(index, payload) {
 
 /** Actions that should not count as venue activity (in-game wake-lock idle). */
 const VENUE_ACTIVITY_SKIP = new Set([
+    'CLIENT_INFO',
     'BOARD_CLEAR_LOG',
     'BOARD_SET_LOG_PAUSED'
 ]);
@@ -1615,6 +1686,7 @@ function detectionBoardLooksStopped() {
 
 /** Actions that should not wake the board's detection. */
 const BOARD_WAKE_SKIP = new Set([
+    'CLIENT_INFO',
     'BOARD_CLEAR_LOG',
     'BOARD_SET_LOG_PAUSED',
     'TVM_COMPLETE',
@@ -2881,6 +2953,20 @@ wss.on('connection', (ws) => {
                 /** Configure modal's "Test" button — raw TCP reachability check, no
                  *  protocol/app-specific knowledge needed. Replies only to the asking
                  *  client, not a broadcast. */
+                // A Control reporting its screen (see reportClientInfo in
+                // control.html). Logged, nothing else.
+                case 'CLIENT_INFO': {
+                    const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : '?');
+                    logDebugEvent(
+                        'CLIENT_INFO',
+                        `${String(request.page || 'client')}: viewport ${n(request.width)}x${n(request.height)} CSS px, ` +
+                        `screen ${n(request.screenWidth)}x${n(request.screenHeight)}, pixel ratio ${n(request.dpr)}, ` +
+                        `touch ${n(request.touch)}`,
+                        { ua: String(request.ua || '').slice(0, 200) }
+                    );
+                    break;
+                }
+
                 case 'TEST_BOARD_CONNECTION': {
                     const host = String(request.host || '').trim();
                     const port = Number(request.port);

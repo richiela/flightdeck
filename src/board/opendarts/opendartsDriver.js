@@ -217,6 +217,9 @@ function createOpenDartsDriver({ host, port, onUpdate, onEvent }) {
      *  /api/live/recent fetch from replaying a visit twice. */
     const backfilledVisitIds = new Set();
     const backfilledVisitOrder = [];
+    /** Set by this driver's first successful connection; only later
+     *  connections are reconnects that may need a backfill. */
+    let connectedBefore = false;
 
     const state = {
         connection: 'connecting',
@@ -471,6 +474,29 @@ function createOpenDartsDriver({ host, port, onUpdate, onEvent }) {
     }
 
     /**
+     * First connection of this driver: everything already in OD's history
+     * happened before it existed -- before FD started, or under the driver
+     * a Configure save just replaced, which scored it live. Mark it all as
+     * seen and score none of it; backfill is for turns finished during a
+     * gap in THIS driver's connection only.
+     *
+     * Without this, saving Configure mid-game rebuilt the driver, whose
+     * empty seen-set replayed OD's recent history into the match: on
+     * dartsrig (2026-10-03) a visit OD had just cleared with a Reset came
+     * back as a MISS nobody threw.
+     */
+    async function seedRecentVisits() {
+        try {
+            const res = await httpRequest(boardHost, boardPort, 'GET', '/api/live/recent', null, HTTP_TIMEOUT_MS);
+            if (!(res.status >= 200 && res.status < 300) || !res.data || !Array.isArray(res.data.visits)) return;
+            for (const v of res.data.visits) rememberBackfilledVisit(v && v.visit);
+        } catch (_) {
+            // Nothing seeded: the next reconnect may replay one old visit at
+            // worst -- the same as before this existed.
+        }
+    }
+
+    /**
      * Closes the "missed an entire turn while disconnected" gap: a visit
      * that both started and completed during an outage never appears in
      * any `hello` (hello only ever shows the turn in progress "now"), so
@@ -487,6 +513,9 @@ function createOpenDartsDriver({ host, port, onUpdate, onEvent }) {
                 const visitId = v && v.visit;
                 if (visitId == null || backfilledVisitIds.has(visitId)) continue;
                 rememberBackfilledVisit(visitId);
+                // A Reset means "discard this turn" -- FD sends one when a
+                // match starts -- so its darts are never a turn to score.
+                if (v.reason === 'reset') continue;
                 const darts = Array.isArray(v.darts) ? v.darts : [];
                 darts.forEach((dart, i) => commitScoredDart(dart, visitId, i, source));
                 if (darts.length) {
@@ -575,10 +604,17 @@ function createOpenDartsDriver({ host, port, onUpdate, onEvent }) {
             console.log(`\x1b[36m[OPENDARTS]\x1b[0m Connected ${boardHost}:${boardPort}`);
             stopDiagnosticPoll();
             emit();
-            // hello arrives immediately on connect. Backfill runs alongside
-            // it (not blocking) to catch any turn that fully completed
-            // while this connection was down — see backfillRecentVisits.
-            backfillRecentVisits('recent-backfill').catch(() => {});
+            // hello arrives immediately on connect. On a RE-connect, backfill
+            // runs alongside it (not blocking) to catch any turn that fully
+            // completed while this connection was down — see
+            // backfillRecentVisits. A first connect only seeds what is
+            // already history — see seedRecentVisits.
+            if (connectedBefore) {
+                backfillRecentVisits('recent-backfill').catch(() => {});
+            } else {
+                connectedBefore = true;
+                seedRecentVisits().catch(() => {});
+            }
         });
 
         ws.on('message', (buf) => {
